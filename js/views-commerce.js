@@ -256,9 +256,10 @@ route('recommend', {
       <div class="col-lg-6">${card('安全檢查明細（雛型展示用）', `<ul class="list-unstyled mb-0">${gates.map(g => `<li><i class="bi bi-${g.ok ? 'check-circle text-success' : 'slash-circle text-danger'} me-1" aria-hidden="true"></i><span class="visually-hidden">${g.ok ? '通過：' : '未通過：'}</span>${g.label}${g.ok ? '' : ` <span class="text-danger small">— ${esc(g.why)}</span>`}</li>`).join('')}</ul>${skipped.length ? `<hr><div class="small text-muted">${skipped.map(esc).join('<br>')}</div>` : ''}`)}</div></div>
       <h5 class="mt-2">衛教內容</h5>${card('', DB.kbDocs.filter(d => d.cat === '衛教' && isLive(d)).map(d => `<details class="mb-2"><summary>${esc(d.title)}（v${d.version}，已審核）</summary>${d.chunks.map(c => `<div class="cite mt-2"><strong>${esc(c.sec)}</strong>\n${esc(c.text)}</div>`).join('')}</details>`).join(''))}
       <h5>為您呈現的商品</h5>${items.length ? `<div class="row">${items.map(i => productCard(i.p, `<details class="small mb-2"><summary>為什麼看到這個？</summary>${esc(i.why)}</details>`)).join('')}</div>` : card('', '<span class="text-muted">目前不提供個人化推薦。您仍可使用所有量測與健康功能。</span>')}
-      ${card('營養師／藥師諮詢（FR-86）', `<form data-submit="askConsult" class="row g-2"><div class="col-md-10"><input class="form-control" name="q" maxlength="200" placeholder="想詢問的問題" required></div><div class="col-md-2"><button class="btn btn-outline-primary w-100">送出</button></div>
+      ${card('營養師／藥師諮詢（FR-86）', `${EMERGENCY}<form data-submit="askConsult" class="row g-2"><div class="col-md-10"><input class="form-control" name="q" maxlength="200" placeholder="想詢問的問題" required></div><div class="col-md-2"><button class="btn btn-outline-primary w-100">送出</button></div>
         <div class="col-12"><label class="form-check small"><input class="form-check-input" type="checkbox" name="share" ${shareableRecord(sid) ? '' : 'disabled'}><span class="form-check-label">附上最近一次量測給藥師（只用於這次諮詢，可隨時撤回）${shareableRecord(sid) ? '' : '：沒有可分享的量測（職場量測不分享）'}</span></label></div></form>
-        ${table(['時間', '問題', '分享給藥師', '回覆'], DB.consults.filter(c => c.subject === sid).map(c => [c.time, esc(c.q), c.share ? (c.shareRevoked ? '已撤回' : `已分享 <button class="btn btn-sm btn-outline-danger" data-act="revokeShare" data-id="${c.id}">撤回分享</button>`) : '未分享', esc(c.reply || '待回覆')]), '尚無諮詢')}`)}`;
+        <p class="small text-muted mt-2">收到回覆後可以追問；沒有其他問題時請結案。結案後不能再追問，附上的量測也停止分享。身體不適請直接就醫，不要等回覆。</p>
+        ${ownConsults(sid)}`)}`;
   }
 });
 Object.assign(ACTIONS, {
@@ -272,37 +273,143 @@ Object.assign(ACTIONS, {
   askConsult: el => {
     const f = new FormData(el), q = f.get('q').trim(), sid = me().subject;
     if (!q) return;
-    const share = f.get('share') ? shareableRecord(sid)?.id || '' : '';
-    DB.consults.unshift({ id: uid('Q'), time: nowStr(), subject: sid, q, reply: '', share, shareRevoked: '' });
-    App.refresh(); toast(share ? '已轉介營養師／藥師，並附上最近一次量測' : '已轉介營養師／藥師', 'success');
+    const draft = { kind: '提問', user: me().id, subject: sid, text: q, wantShare: !!f.get('share') };
+    if (redFlagsIn(q).length) return holdForRedFlag(draft);
+    commitConsult(draft, []);
   },
   revokeShare: el => { const c = DB.consults.find(x => x.id === el.dataset.id); if (c.subject !== me().subject) return deny('只能撤回自己的分享'); c.shareRevoked = nowStr(); App.refresh(); toast('已撤回分享'); }
 });
 
+/* 紅旗分流：提問或追問含紅旗詞時先不送出，顯示緊急提示。
+   諮詢可能只是提到病史（例如家人中風過），所以本人確認目前沒有緊急狀況後仍可送出，並在案件上標記。
+   稽核只記時間、對象、步驟與是否送出，不記內容與命中的詞。 */
+let heldConsult = null;
+function holdForRedFlag(draft) {
+  const log = { time: nowStr(), subject: draft.subject, stage: `諮詢${draft.kind}`, sent: false };
+  DB.redFlagLog.unshift(log); save();
+  heldConsult = { draft, log };
+  modal('請先確認是否需要緊急協助', `<div class="alert alert-danger"><h5><i class="bi bi-telephone-fill me-1" aria-hidden="true"></i>請立即尋求協助</h5>您描述的狀況可能需要緊急處理。如果<strong>現在</strong>有這些情形，請<strong>立即撥打 119</strong>，或請身邊的人協助就醫。</div>
+    <p class="mb-0"><strong>內容尚未送出。</strong>諮詢不是緊急聯絡管道，營養師／藥師不會即時看到，也沒有回覆時限。如果只是詢問過去的狀況或一般問題，確認目前沒有緊急情形後可以送出。</p>`,
+    '<button class="btn btn-secondary" data-bs-dismiss="modal">先不送出</button><button class="btn btn-outline-danger" data-act="sendFlagged">目前沒有緊急狀況，仍要送出</button>');
+}
+function commitConsult(draft, flags) {
+  const share = draft.wantShare ? shareableRecord(draft.subject)?.id || '' : '';
+  DB.consults.unshift({ id: uid('Q'), time: nowStr(), subject: draft.subject, q: draft.text, flags, status: '待回覆', thread: [], closed: null, share, shareRevoked: '' });
+  App.refresh(); toast(share ? '已轉介營養師／藥師，並附上最近一次量測' : '已轉介營養師／藥師', 'success');
+}
+function commitFollowUp(draft, flags) {
+  const c = consultById(draft.id);
+  c.thread.push({ from: 'subject', time: nowStr(), text: draft.text, flags });
+  c.status = '待回覆'; App.refresh(); toast('已送出追問', 'success');
+}
+const consultFlagged = c => !!(c.flags?.length || c.thread.some(m => m.flags?.length));
+const consultUrgent = c => c.status === '待回覆' && consultFlagged(c);
+/** 藥師端排序：含緊急關鍵字且待回覆的排最前面，其餘維持原順序。 */
+const proOrder = list => [...list].sort((a, b) => consultUrgent(b) - consultUrgent(a));
+const FLAG_NOTE = '「含緊急關鍵字」是本人看過 119 提示、表示目前沒有緊急狀況後仍送出的內容，請優先確認。只靠關鍵字比對，沒有標記不代表不緊急。';
+
+/* 諮詢流程：待回覆 → 已回覆 → 已結案；本人追問後回到「待回覆」。
+   本人隨時可結案；藥師／營養師只能在已回覆後結案，且須填寫原因。 */
+const consultById = id => DB.consults.find(c => c.id === id);
+const qualifiedPro = (u = me()) => u.role === 'pro' && u.qualUntil >= DB.today;
+function consultThread(c) {
+  const line = (who, time, text, flags) => `<li><strong>${esc(who)}</strong>：${esc(text)}${flags?.length ? ' ' + badge('含緊急關鍵字', 'danger') : ''}<small class="text-muted d-block">${time}</small></li>`;
+  const items = [line('提問', c.time, c.q, c.flags), ...c.thread.map(m => line(m.from === 'pro' ? m.name : '追問', m.time, m.text, m.flags))];
+  const end = c.closed ? `<li class="text-muted">${esc(c.closed.by)}結案${c.closed.reason ? `：${esc(c.closed.reason)}` : ''}<small class="d-block">${c.closed.time}</small></li>` : '';
+  return `<ul class="list-unstyled mb-0 consult-thread">${items.join('')}${end}</ul>`;
+}
+function ownShare(c) {
+  if (!c.share) return '未分享';
+  if (c.shareRevoked) return '已撤回';
+  if (c.status === '已結案') return '已結案，停止分享';
+  return `已分享 <button class="btn btn-sm btn-outline-danger" data-act="revokeShare" data-id="${c.id}">撤回分享</button>`;
+}
+/** 本人的諮詢逐筆列出，不用表格：手機上追問與結案按鈕才不會被捲到畫面外。 */
+function ownConsults(sid) {
+  const list = DB.consults.filter(c => c.subject === sid);
+  if (!list.length) return '<p class="text-muted mb-0">尚無諮詢</p>';
+  return `<ul class="list-unstyled mb-0">${list.map(c => `<li class="border-top py-3"><div class="mb-2">${sBadge(c.status)}</div>${consultThread(c)}<div class="small mt-2">分享給藥師：${ownShare(c)}</div>${ownActions(c)}</li>`).join('')}</ul>`;
+}
+function ownActions(c) {
+  if (c.status === '已結案') return '';
+  const follow = c.status === '已回覆' ? `<form data-submit="followUp" data-id="${c.id}" class="d-flex gap-1 mt-2"><input class="form-control form-control-sm" name="text" maxlength="200" required placeholder="追問內容" aria-label="追問內容"><button class="btn btn-sm btn-primary text-nowrap">追問</button></form>` : '';
+  return `${follow}<button class="btn btn-sm btn-outline-secondary mt-2" data-act="closeOwnConsult" data-id="${c.id}">${c.status === '已回覆' ? '沒有其他問題，結案' : '不用回覆了，結案'}</button>`;
+}
+/** 藥師端依案件狀態顯示回覆或結案欄位；沒有有效資格時不給任何操作。 */
+function proActions(c) {
+  if (!qualifiedPro() || c.status === '已結案') return '';
+  const form = (act, name, label, button, style) => `<form data-submit="${act}" data-id="${c.id}" class="d-flex gap-1 mt-2"><input class="form-control form-control-sm" name="${name}" maxlength="300" required placeholder="${label}" aria-label="${label}"><button class="btn btn-sm ${style} text-nowrap">${button}</button></form>`;
+  return c.status === '待回覆' ? form('replyConsult', 'reply', '回覆內容', '回覆', 'btn-primary') : form('closeConsult', 'reason', '結案原因', '結案', 'btn-outline-secondary');
+}
+function finishConsult(c, by, reason) {
+  c.status = '已結案';
+  c.closed = { by, reason, time: nowStr() };
+}
+
 route('consult', {
   title: '諮詢回覆', icon: 'chat-square-text', roles: ['pro'], stage: '3', fr: 'FR-86',
   render(el) {
-    el.innerHTML = card('待回覆與紀錄', table(['時間', '諮詢者', '問題', '回覆'], DB.consults.map(c => [c.time, c.subject, esc(c.q), c.reply ? esc(c.reply) + `<div class="small text-muted">${esc(c.by)}</div>` : `<form data-submit="replyConsult" data-id="${c.id}" class="d-flex gap-1"><input class="form-control form-control-sm" name="reply" maxlength="300" required><button class="btn btn-sm btn-primary">回覆</button></form>`]), '尚無諮詢（以受測者身分在推薦頁送出）') + '<p class="small text-muted mt-2 mb-0">本人在諮詢時勾選分享的量測，到「社區藥局」頁查看。</p>');
+    el.innerHTML = `${qualifiedPro() ? '' : '<div class="alert alert-danger py-2 small">你的專業資格已到期：不能回覆，也不能結案。</div>'}
+      ${DB.consults.some(consultFlagged) ? `<div class="alert alert-warning py-2 small">${FLAG_NOTE}</div>` : ''}
+      ${card('諮詢案件', `<div class="case-table">${table(['時間', '諮詢者', '對話紀錄', '狀態與操作'], proOrder(DB.consults).map(c => [c.time, c.subject, consultThread(c), sBadge(c.status) + proActions(c)]), '尚無諮詢（以受測者身分在推薦頁送出）')}</div><p class="small text-muted mt-2 mb-0">本人在諮詢時勾選分享的量測，到「社區藥局」頁查看。回覆後若本人沒有追問，可填寫原因結案。回覆內容不得宣稱商品功效。</p>`)}`;
   }
 });
-ACTIONS.replyConsult = el => {
-  const c = DB.consults.find(x => x.id === el.dataset.id), reply = new FormData(el).get('reply').trim();
-  if (me().role !== 'pro') return deny('僅營養師／藥師可回覆');
-  if (me().qualUntil < DB.today) return deny('專業資格已到期');
-  if (reply) { c.reply = reply; c.by = me().name; App.refresh(); }
-};
+Object.assign(ACTIONS, {
+  replyConsult: el => {
+    const c = consultById(el.dataset.id), reply = new FormData(el).get('reply').trim();
+    if (me().role !== 'pro') return deny('僅營養師／藥師可回覆');
+    if (!qualifiedPro()) return deny('專業資格已到期');
+    if (c.status !== '待回覆') return deny('此諮詢目前不需回覆');
+    if (!reply) return;
+    c.thread.push({ from: 'pro', name: me().name, time: nowStr(), text: reply });
+    c.status = '已回覆'; App.refresh(); toast('已回覆', 'success');
+  },
+  closeConsult: el => {
+    const c = consultById(el.dataset.id), reason = new FormData(el).get('reason').trim();
+    if (!qualifiedPro()) return deny('僅資格有效的營養師／藥師可結案');
+    if (c.status !== '已回覆') return deny('回覆後才能由藥師／營養師結案');
+    if (!reason) return deny('結案必須填寫原因');
+    finishConsult(c, me().name, reason); App.refresh(); toast('已結案', 'success');
+  },
+  followUp: el => {
+    const c = consultById(el.dataset.id), text = new FormData(el).get('text').trim();
+    if (me().role !== 'subject' || c.subject !== me().subject) return deny('只能追問自己的諮詢');
+    if (c.status !== '已回覆') return deny('收到回覆後才能追問；已結案請另送新的諮詢');
+    if (!text) return;
+    const draft = { kind: '追問', user: me().id, subject: c.subject, text, id: c.id };
+    if (redFlagsIn(text).length) return holdForRedFlag(draft);
+    commitFollowUp(draft, []);
+  },
+  sendFlagged: () => {
+    const held = heldConsult;
+    if (!held || held.draft.user !== me().id) return deny('沒有等待送出的內容');
+    heldConsult = null;
+    closeModal();
+    if (held.draft.kind === '追問' && consultById(held.draft.id)?.status !== '已回覆') return deny('此諮詢目前不能追問');
+    held.log.sent = true;
+    (held.draft.kind === '追問' ? commitFollowUp : commitConsult)(held.draft, redFlagsIn(held.draft.text));
+  },
+  closeOwnConsult: el => {
+    const c = consultById(el.dataset.id);
+    if (me().role !== 'subject' || c.subject !== me().subject) return deny('只能結案自己的諮詢');
+    if (c.status === '已結案') return deny('此諮詢已結案');
+    finishConsult(c, '本人', ''); App.refresh(); toast('已結案', 'success');
+  }
+});
 
 /* ---------- 社區藥局（應用場景延伸） ---------- */
 /** 可分享給藥師的量測：本人最近一次非職場量測（職場量測不用於商品或通路情境）。 */
 const shareableRecord = sid => recordsOf(sid).filter(r => !['上工前', '休息後'].includes(r.context) && !r.site.includes('工地')).at(-1);
-const sharedRecord = c => c.share && !c.shareRevoked ? DB.records.find(r => r.id === c.share) : null;
+/** 分享只用於該次諮詢：本人撤回或結案後就取不到。 */
+const sharedRecord = c => c.share && !c.shareRevoked && c.status !== '已結案' ? DB.records.find(r => r.id === c.share) : null;
 route('pharmacy', {
   title: '社區藥局', icon: 'capsule', roles: ['pro', 'hadmin'], stage: '延伸', fr: 'FR-85、86',
   render(el) {
-    const isPro = me().role === 'pro', qualified = isPro && me().qualUntil >= DB.today;
+    const isPro = me().role === 'pro', qualified = qualifiedPro();
     const shared = c => {
       if (!c.share) return '<span class="text-muted">未分享</span>';
       if (c.shareRevoked) return '<span class="text-muted">本人已撤回</span>';
+      if (c.status === '已結案') return '<span class="text-muted">已結案，停止分享</span>';
       if (!isPro) return '<span class="text-muted">已分享（僅藥師可查看）</span>';
       if (!qualified) return '<span class="text-muted">資格到期，無法查看</span>';
       const r = sharedRecord(c);
@@ -311,29 +418,91 @@ route('pharmacy', {
     };
     el.innerHTML = `<div class="alert alert-info py-2 small">民眾在藥局量測站的流程與「現場機台模式」相同：刷會員卡、結束自動清畫面，結果畫面不放商品（FR-85）。藥師只看得到本人在諮詢時勾選分享的那一次量測，本人可隨時撤回。個人化推薦只在本人帳號、另外同意後顯示，門市不依量測結果當場推銷。</div>
       ${!isPro ? '<div class="alert alert-secondary py-2 small">健康管理員只能檢視量測站與諮詢狀態；分享的量測只給藥師看，回覆也由藥師處理。</div>' : qualified ? '' : '<div class="alert alert-danger py-2 small">你的專業資格已到期：不能查看分享的量測，也不能回覆。</div>'}
-      ${card('諮詢與分享的量測', table(['時間', '諮詢者', '問題', '本人分享的量測', '回覆'], DB.consults.map(c => [c.time, c.subject, esc(c.q), shared(c), c.reply ? esc(c.reply) + `<div class="small text-muted">${esc(c.by)}</div>` : qualified ? `<form data-submit="replyConsult" data-id="${c.id}" class="d-flex gap-1"><input class="form-control form-control-sm" name="reply" maxlength="300" required aria-label="回覆內容"><button class="btn btn-sm btn-primary text-nowrap">回覆</button></form>` : '—']), '尚無諮詢'))}
+      ${DB.consults.some(consultFlagged) ? `<div class="alert alert-warning py-2 small">${FLAG_NOTE}</div>` : ''}
+      ${card('諮詢與分享的量測', `<div class="case-table">${table(['時間', '諮詢者', '對話紀錄', '本人分享的量測', '狀態與操作'], proOrder(DB.consults).map(c => [c.time, c.subject, consultThread(c), shared(c), sBadge(c.status) + proActions(c)]), '尚無諮詢')}</div>`)}
       ${card('藥局量測站', table(['裝置', '場域', '狀態', '最後使用'], DB.devices.filter(d => d.site.includes('藥局')).map(d => [d.id, esc(d.site), d.active ? badge('啟用', 'success') : badge('停用', 'secondary'), d.lastUsed || '—'])))}
       <p class="small text-muted">查看分享的量測會寫入稽核紀錄。回覆內容不得宣稱商品功效。</p>`;
   }
 });
 
 /* ---------- 不良反應與客訴（FR-89） ---------- */
+/* 案件流程：待受理 → 處理中 → 已結案。回報人只看狀態與結案結果，內部處理紀錄不顯示給回報人。 */
+const CLOSE_RESULTS = ['已回覆說明', '換貨或退款', '建議停用並就醫', '下架商品', '查無與商品的關聯', '其他'];
+const adverseById = id => DB.adverse.find(x => x.id === id);
+const adverseLog = (a, text) => a.history.push({ time: nowStr(), by: me().name, text });
+const adverseHandler = () => ROUTES.adverse.roles.includes(me().role) && me().role !== 'subject';
+const closedText = a => `${esc(a.result.type)}：${esc(a.result.note)}<div class="small text-muted">${a.result.time}</div>`;
+function adverseDetail(a) {
+  const p = productById(a.product);
+  const body = `<p><strong>${esc(p.draft.name)}</strong>｜${a.kind}｜${sBadge(a.status)}｜回報時間 ${a.time}</p><p>${esc(a.text)}</p>
+    ${a.result ? `<div class="alert alert-secondary py-2">結案結果　${closedText(a)}</div>` : ''}
+    <h6>處理歷程</h6><ul class="small">${a.history.map(h => `<li>${h.time}　${esc(h.by)}：${esc(h.text)}</li>`).join('')}</ul>
+    ${a.status === '待受理' ? '<p class="small text-muted">受理後才能填寫處理紀錄與結案。</p>' : ''}
+    ${a.status === '處理中' ? `<form id="adverseForm" data-submit="adverseAction" data-id="${a.id}">
+      <label class="form-label" for="advNote">內部處理紀錄（回報人看不到）</label><input class="form-control" id="advNote" name="note" maxlength="300">
+      <label class="form-check mt-3"><input class="form-check-input" type="checkbox" name="close"><span class="form-check-label">結案</span></label>
+      <div class="row g-2 mt-0"><div class="col-sm-5"><label class="form-label" for="advType">結案結果（結案必填）</label><select class="form-select" id="advType" name="type">${opts([['', '請選擇'], ...CLOSE_RESULTS.map(r => [r, r])])}</select></div>
+      <div class="col-sm-7"><label class="form-label" for="advReply">給回報人的說明（結案必填）</label><input class="form-control" id="advReply" name="reply" maxlength="300"></div></div></form>` : ''}`;
+  const cancel = '<button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>';
+  const action = a.status === '待受理' ? `<button class="btn btn-primary" data-act="adverseAccept" data-id="${a.id}">受理</button>` : '<button class="btn btn-primary" form="adverseForm">儲存</button>';
+  modal(`案件 ${a.id}`, body, a.status === '已結案' ? undefined : cancel + action);
+}
+
 route('adverse', {
   title: '不良反應與客訴', icon: 'exclamation-octagon', roles: ['subject', 'merch', 'pro', 'legal'], stage: '3', fr: 'FR-89',
   render(el) {
     const mine = me().role === 'subject';
     const list = DB.adverse.filter(a => !mine || a.by === me().id);
-    el.innerHTML = `${mine ? EMERGENCY : ''}${card('回報', `<form data-submit="saveAdverse" class="row g-2"><div class="col-md-3"><select class="form-select" name="product">${opts(DB.products.filter(p => p.published).map(p => [p.id, p.published.name]))}</select></div><div class="col-md-2"><select class="form-select" name="kind">${opts(['不良反應', '客訴'])}</select></div><div class="col-md-5"><input class="form-control" name="text" maxlength="300" placeholder="狀況描述" required></div><div class="col-md-2"><button class="btn btn-warning w-100">送出</button></div></form>`)}
-      ${card('回報清單', table(['時間', '商品', '類型', '描述', '處置'], list.map(a => [a.time, esc(productById(a.product).draft.name), a.kind, esc(a.text), mine ? esc(a.action || '處理中') : `${esc(a.action || '')} ${liveProduct(productById(a.product)) ? `<button class="btn btn-sm btn-danger" data-act="recall" data-id="${a.id}">下架並通知已購者</button>` : ''}`])))}`;
+    const head = ['編號', '時間', '商品', '類型', '描述', '狀態', ...(mine ? ['處理結果'] : ['受理人', '結果／處置', '操作'])];
+    const row = a => {
+      const base = [a.id, a.time, esc(productById(a.product).draft.name), a.kind, esc(a.text), sBadge(a.status)];
+      if (mine) return [...base, a.result ? closedText(a) : '尚未結案'];
+      const recallBtn = a.status !== '已結案' && liveProduct(productById(a.product)) ? ` <button class="btn btn-sm btn-danger" data-act="recall" data-id="${a.id}">下架並通知已購者</button>` : '';
+      const outcome = [a.result ? closedText(a) : '', a.action ? `<div class="small">${esc(a.action)}</div>` : ''].join('') || '—';
+      return [...base, a.handler ? esc(userName(a.handler)) : '—', outcome + recallBtn, `<button class="btn btn-sm btn-primary text-nowrap" data-act="adverseOpen" data-id="${a.id}">${a.status === '已結案' ? '查看' : '處理'}</button>`];
+    };
+    el.innerHTML = `${mine ? EMERGENCY : '<div class="alert alert-secondary py-2 small">流程：待受理 → 處理中 → 已結案。結案必須填寫結果類別與給回報人的說明。誰有權結案、不良反應是否須對外通報，需法遵確認。</div>'}${card('回報', `<form data-submit="saveAdverse" class="row g-2"><div class="col-md-3"><select class="form-select" name="product" aria-label="商品">${opts(DB.products.filter(p => p.published).map(p => [p.id, p.published.name]))}</select></div><div class="col-md-2"><select class="form-select" name="kind" aria-label="類型">${opts(['不良反應', '客訴'])}</select></div><div class="col-md-5"><input class="form-control" name="text" maxlength="300" placeholder="狀況描述" aria-label="狀況描述" required></div><div class="col-md-2"><button class="btn btn-warning w-100">送出</button></div></form>`)}
+      ${card('回報清單', `<div class="case-table">${table(head, list.map(row), '尚無回報')}</div>`)}`;
   }
 });
 Object.assign(ACTIONS, {
-  saveAdverse: el => { const f = Object.fromEntries(new FormData(el)); if (!f.text.trim()) return; DB.adverse.unshift({ id: uid('D'), time: nowStr(), by: me().id, ...f, action: '' }); App.refresh(); toast('已送出回報', 'success'); },
+  saveAdverse: el => {
+    const f = Object.fromEntries(new FormData(el));
+    if (!f.text.trim()) return;
+    const a = { id: uid('D'), time: nowStr(), by: me().id, ...f, status: '待受理', handler: '', action: '', result: null, history: [] };
+    a.history.push({ time: a.time, by: '回報人', text: '送出回報' });
+    DB.adverse.unshift(a); App.refresh(); toast('已送出回報', 'success');
+  },
+  adverseOpen: el => { if (!adverseHandler()) return deny('沒有處理案件的權限'); adverseDetail(adverseById(el.dataset.id)); },
+  adverseAccept: el => {
+    const a = adverseById(el.dataset.id);
+    if (!adverseHandler()) return deny('沒有處理案件的權限');
+    if (a.status !== '待受理') return deny('只有待受理的案件可以受理');
+    a.status = '處理中'; a.handler = me().id; adverseLog(a, '受理案件');
+    closeModal(); App.refresh(); toast('已受理', 'success');
+  },
+  adverseAction: el => {
+    const a = adverseById(el.dataset.id), f = Object.fromEntries(new FormData(el)), note = f.note.trim(), reply = f.reply.trim();
+    if (!adverseHandler()) return deny('沒有處理案件的權限');
+    if (a.status !== '處理中') return deny('只有處理中的案件可以填寫');
+    if (f.close && (!f.type || !reply)) return deny('結案必須選擇結案結果，並填寫給回報人的說明');
+    if (!f.close && !note) return deny('請填寫內部處理紀錄');
+    if (note) adverseLog(a, note);
+    if (f.close) {
+      a.status = '已結案'; a.result = { type: f.type, note: reply, by: me().id, time: nowStr() };
+      adverseLog(a, `結案（${f.type}）：${reply}`);
+    }
+    closeModal(); App.refresh(); toast(f.close ? '已結案' : '已儲存處理紀錄', 'success');
+  },
   recall: el => {
-    const a = DB.adverse.find(x => x.id === el.dataset.id), p = productById(a.product);
+    const a = adverseById(el.dataset.id), p = productById(a.product);
+    if (!adverseHandler()) return deny('沒有處理案件的權限');
     takeDown(p, `不良反應回報緊急下架（${me().name}）`);
     const buyers = new Set(DB.orders.filter(o => o.items.some(i => i.id === p.id) && o.paid).map(o => o.buyer));
     a.action = `已下架；已通知自建購物購買者 ${buyers.size} 人${p.published.channel === '外部電商' ? '；外部電商購買者需透過平台通知' : ''}`;
+    // 下架不等於結案：尚未受理的案件視為由下架者受理，仍須另行結案
+    if (a.status === '待受理') { a.status = '處理中'; a.handler = me().id; }
+    adverseLog(a, a.action);
     App.refresh();
   }
 });

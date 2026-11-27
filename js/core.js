@@ -1,7 +1,7 @@
 /* 共用：狀態、權限、判定規則、路由、版面。雛型的「伺服器端檢查」以前端函式模擬。 */
 'use strict';
 
-const STORE_KEY = 'health-proto-v4'; // 示範資料有變動時遞增，避免讀到舊資料
+const STORE_KEY = 'health-proto-v7'; // 示範資料有變動時遞增，避免讀到舊資料
 let DB;
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -159,7 +159,7 @@ function exportCsv(name, rows) {
 const card = (title, body, extra = '') => `<div class="card">${title ? `<div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2"><strong>${title}</strong><div>${extra}</div></div>` : ''}<div class="card-body">${body}</div></div>`;
 const table = (heads, rows, empty = '目前沒有資料') => `<div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr>${heads.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.length ? rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${heads.length}" class="text-center text-muted py-3">${empty}</td></tr>`}</tbody></table></div>`;
 const badge = (text, color = 'secondary') => `<span class="badge text-bg-${color}">${esc(text)}</span>`;
-const STATUS_COLORS = { 有效: 'success', 參考: 'info', 實驗中: 'secondary', 無法估測: 'secondary', 已發布: 'success', 已核准: 'success', 草稿: 'secondary', 待專業審核: 'warning', 待法遵審核: 'warning', 已退回: 'danger', 已撤銷: 'dark', 已下架: 'dark', 待複測: 'warning', 待處理: 'danger', 處理中: 'primary', 已結案: 'success', 已驗證: 'success', 成功: 'success', 失敗: 'danger' };
+const STATUS_COLORS = { 有效: 'success', 參考: 'info', 實驗中: 'secondary', 無法估測: 'secondary', 已發布: 'success', 已核准: 'success', 草稿: 'secondary', 待專業審核: 'warning', 待法遵審核: 'warning', 已退回: 'danger', 已撤銷: 'dark', 已下架: 'dark', 待受理: 'warning', 待回覆: 'warning', 已回覆: 'primary', 待複測: 'warning', 待處理: 'danger', 處理中: 'primary', 已結案: 'success', 已驗證: 'success', 成功: 'success', 失敗: 'danger' };
 const sBadge = s => badge(s, STATUS_COLORS[s] || 'secondary');
 /** 判定一律「圖示＋文字」，不只靠顏色（NFR-09）。 */
 function judgeMark(j) {

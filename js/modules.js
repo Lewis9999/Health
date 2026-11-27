@@ -5,6 +5,13 @@ const HOME_COLOR = '#23402f';
 // 模組色只表示「目前在哪個模組」，用低彩度的自然色。鮮明的綠、黃、紅保留給健康判定。
 const MODULES = [
   {
+    id: 'process', tab: 'flows', name: '流程管理', icon: 'diagram-3', color: '#4d5270', tint: '#e9eaf0', spec: 'FR-40～44、89、91～95、103',
+    desc: '各項作業流程的步驟、負責角色與目前件數',
+    sections: [
+      { name: '流程', pages: { flows: '各流程的步驟、負責角色與目前件數' } }
+    ]
+  },
+  {
     id: 'health', name: '健康管理', icon: 'heart-pulse', color: '#17594a', tint: '#e3eee8', spec: '規格 6.1～6.8',
     desc: '同意、量測、趨勢、警示與場景應用',
     sections: [
@@ -18,7 +25,7 @@ const MODULES = [
     desc: '商品審核、推薦、購物與銷售通路',
     sections: [
       { name: '我的衛教與購物', pages: { recommend: '同意、問卷與安全檢查通過後的推薦', shop: '商品專區、購物車與付款模擬' } },
-      { name: '商品與專業審核', pages: { products: '商品資料、兩關審核與發布', rules: '推薦條件的建立與審核', consult: '營養師與藥師回覆提問', adverse: '回報與追蹤不良反應、客訴' } },
+      { name: '商品與專業審核', pages: { products: '商品資料、兩關審核與發布', rules: '推薦條件的建立與審核', consult: '營養師與藥師回覆提問、追問到結案', adverse: '不良反應與客訴從回報、受理到結案' } },
       { name: '訂單與通路', pages: { orders: '出貨、庫存與依批號查訂單', channels: '外部電商同步與下架', sales: '只看彙總的銷售數字' } }
     ]
   },
@@ -32,9 +39,10 @@ const MODULES = [
   },
   {
     id: 'admin', name: '系統設定', icon: 'gear', color: '#6a5742', tint: '#eeeadf', spec: '規格 6.3、6.7、8',
-    desc: '指標、門檻、裝置、稽核與地端部署',
+    desc: '指標、門檻、裝置、權限、稽核與地端部署',
     sections: [
       { name: '量測設定', pages: { metrics: '指標啟用與驗證等級', thresholds: '分族群的門檻與版本', devices: '量測裝置與場域', reference: '與參考儀器配對做場域驗證' } },
+      { name: '權限管理', pages: { permissions: '全部功能與各角色可使用範圍' } },
       { name: '稽核與部署', pages: { audit: '查閱與匯出紀錄', deploy: '地端位址限制與待決事項' } }
     ]
   }
@@ -58,6 +66,7 @@ const DEMOS = [
 
 const moduleById = id => MODULES.find(m => m.id === id);
 const moduleOf = path => path.startsWith('m-') ? moduleById(path.slice(2)) : MODULES.find(m => m.sections.some(s => path in s.pages));
+const moduleHref = m => m.tab || 'm-' + m.id;
 const canOpen = (path, u = me()) => ROUTES[path] && ROUTES[path].roles.includes(u.role);
 /** 目前身分在該模組看得到的分類與頁面；沒有頁面的分類不列出。 */
 const sectionsFor = m => m.sections.map(s => ({ name: s.name, cards: s.cards, pages: Object.entries(s.pages).filter(([p]) => canOpen(p)) })).filter(s => s.pages.length);
@@ -74,11 +83,11 @@ function renderNav(path) {
 
   const tab = (href, label, icon, c, on, extra = '') => `<a class="modtab${on ? ' active' : ''}" style="--c:${c}" href="#/${href}"${on ? ' aria-current="true"' : ''}><i class="bi bi-${icon}" aria-hidden="true"></i><span>${label}</span>${extra}</a>`;
   $('#modtabs').innerHTML = tab('home', '總覽', 'grid', HOME_COLOR, !mod) +
-    MODULES.filter(m => sectionsFor(m).length).map(m => tab('m-' + m.id, m.name, m.icon, m.color, mod === m, m.id === 'health' && path !== 'alerts' ? countBadge('alerts') : '')).join('');
+    MODULES.filter(m => sectionsFor(m).length).map(m => tab(moduleHref(m), m.name, m.icon, m.color, mod === m, m.id === 'health' && path !== 'alerts' ? countBadge('alerts') : '')).join('');
   $('#modtabs .active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 
   if (!sections.length) { $('#rail').innerHTML = ''; return; }
-  $('#rail').innerHTML = `<a class="rail-head" href="#/m-${mod.id}"><i class="bi bi-${mod.icon}" aria-hidden="true"></i><span>${mod.name}</span></a>` +
+  $('#rail').innerHTML = `<a class="rail-head" href="#/${moduleHref(mod)}"><i class="bi bi-${mod.icon}" aria-hidden="true"></i><span>${mod.name}</span></a>` +
     sections.map(s => `<div class="rail-group"><h2>${s.name}</h2><ul>${s.pages.map(([p]) => `<li><a class="rail-link${p === path ? ' active' : ''}" href="#/${p}"${p === path ? ' aria-current="page"' : ''}><i class="bi bi-${ROUTES[p].icon}" aria-hidden="true"></i><span>${ROUTES[p].title}</span>${countBadge(p)}</a></li>`).join('')}</ul></div>`).join('');
 }
 
@@ -86,7 +95,7 @@ const demoList = demos => `<ul class="demo-list">${demos.map(d => `<li style="--
 
 /* ---------- 總覽：模組指引 ---------- */
 route('home', {
-  title: '模組總覽', icon: 'grid', roles: ALL,
+  title: '總覽', icon: 'grid', roles: ALL,
   render(el) {
     const u = me();
     const mine = MODULES.filter(m => sectionsFor(m).length), others = MODULES.filter(m => !mine.includes(m));
@@ -95,13 +104,13 @@ route('home', {
       <p class="lead-line">${esc(u.name)}，你目前的身分是「${ROLE_NAMES[u.role]}」。下面列出這個身分能使用的模組與頁面，其他身分請從右上角切換。</p>
       ${todoHtml()}
       <div class="directory">${mine.map(m => `<section class="dir-row" style="--c:${m.color};--t:${m.tint}">
-        <a class="dir-plate" href="#/m-${m.id}"><i class="bi bi-${m.icon}" aria-hidden="true"></i><h2>${m.name}</h2><p>${m.desc}</p></a>
+        <a class="dir-plate" href="#/${moduleHref(m)}"><i class="bi bi-${m.icon}" aria-hidden="true"></i><h2>${m.name}</h2><p>${m.desc}</p></a>
         <div class="dir-body">${sectionsFor(m).map(s => `<div><h3>${s.name}</h3><ul>${s.pages.map(([p]) => `<li><a href="#/${p}">${ROUTES[p].title}</a> ${countBadge(p)}</li>`).join('')}</ul></div>`).join('')}</div>
       </section>`).join('')}</div>
       ${others.length ? `<p class="small text-muted mt-2">這個身分沒有使用權限的模組：${others.map(m => m.name).join('、')}。</p>` : ''}
       <h2 class="block-title">展示情境</h2>
       <p class="small text-muted">按下按鈕會切換成指定身分、開啟對應頁面，並顯示逐步引導。</p>
-      ${MODULES.map(m => `<h3 class="demo-head" style="--c:${m.color}">${m.name}</h3>${demoList(DEMOS.filter(d => d.mod === m.id))}`).join('')}
+      ${MODULES.filter(m => DEMOS.some(d => d.mod === m.id)).map(m => `<h3 class="demo-head" style="--c:${m.color}">${m.name}</h3>${demoList(DEMOS.filter(d => d.mod === m.id))}`).join('')}
       <div class="proto-note"><strong>這是需求確認用的雛型。</strong>依《健康系統需求規格書（草案 v0.6）》製作。人名、數值、商品、許可字號與知識文件全部虛構；量測、檢索、金流、電商同步皆為模擬，未啟用攝影機，也不對外連線。畫面上的「伺服器端檢查」以瀏覽器程式模擬，不代表實際安全性。操作結果存在這台電腦的瀏覽器，按「重置資料」可還原。</div>
       <details class="mt-3"><summary>本次雛型未包含的需求</summary><ul class="mt-2 mb-0">
         <li>FR-55 視訊診療整合：規格另案評估法規，台灣法規問題暫保留不開發。</li>
@@ -123,7 +132,7 @@ for (const m of MODULES) {
       const demos = DEMOS.filter(d => d.mod === m.id);
       el.innerHTML = `<p class="lead-line">${m.desc}。</p>
         ${sectionsFor(m).map(s => `<h2 class="block-title">${s.name}</h2>${(s.cards ? pageCards : pageList)(s.pages)}`).join('')}
-        <h2 class="block-title">展示情境</h2>${demoList(demos)}`;
+        ${demos.length ? `<h2 class="block-title">展示情境</h2>${demoList(demos)}` : ''}`;
     }
   });
 }

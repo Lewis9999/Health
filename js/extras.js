@@ -21,9 +21,10 @@ function todoItems(u = me()) {
   add('products', '等你審核的商品', DB.products.filter(p => !reviewBlock(p)).length);
   if (['merch', 'pro', 'legal'].includes(u.role)) add('products', '即將到期或逾期的商品複審', DB.products.filter(reviewDue).length);
   add('rules', '等你審核的推薦規則', DB.rules.filter(r => !reviewBlock(r)).length);
-  if (u.role === 'pro' && u.qualUntil >= DB.today) add('consult', '待回覆的諮詢', DB.consults.filter(c => !c.reply).length);
+  if (u.role === 'pro' && u.qualUntil >= DB.today) add('consult', '待回覆的諮詢', DB.consults.filter(c => c.status === '待回覆').length);
+  if (u.role === 'pro' && u.qualUntil >= DB.today) add('consult', '含緊急關鍵字的待回覆諮詢', DB.consults.filter(consultUrgent).length);
   if (u.role === 'merch') add('orders', '待出貨的訂單', DB.orders.filter(o => o.status === '已付款・待出貨').length);
-  if (u.role !== 'subject') add('adverse', '尚未處置的不良反應與客訴', DB.adverse.filter(a => !a.action).length);
+  if (u.role !== 'subject') add('adverse', '尚未結案的不良反應與客訴', DB.adverse.filter(a => a.status !== '已結案').length);
   if (u.role === 'legal') add('kb', '等你審核的知識文件', DB.kbDocs.filter(d => d.status === '待法遵審核' && d.maintainer !== u.id).length);
   return list;
 }

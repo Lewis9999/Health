@@ -3,6 +3,8 @@
 
 const isLive = d => d.status === '已核准' && d.expiry >= DB.today;
 const RED_FLAGS = ['胸痛', '胸悶', '呼吸困難', '喘不過氣', '昏厥', '昏倒', '暈倒', '意識不清', '抽搐', '中風', '大量出血', '自殺'];
+/** 紅旗詞比對，知識助理與專業諮詢共用同一份清單。只是關鍵字比對，沒比到不代表不緊急。 */
+const redFlagsIn = text => RED_FLAGS.filter(w => text.includes(w));
 const FORBIDDEN = ['診斷', '我是不是', '什麼病', '吃什麼藥', '用藥', '藥量', '停藥', '劑量', '能不能吃', '可以吃', '適合吃', '推薦哪', '哪個商品', '產品'];
 const STOP = /[\s，。？！、：；,.?!:;「」（）()的了嗎呢要和與在是有我你請問如何怎麼什麼做]/g;
 
@@ -25,7 +27,7 @@ const stripPii = s => DB.subjects.reduce((t, p) => t.split(p.name).join('［姓�
 function ask(mode, question) {
   const role = me().role;
   let type, hits = [];
-  if (RED_FLAGS.some(w => question.includes(w))) type = '紅旗分流';
+  if (redFlagsIn(question).length) type = '紅旗分流';
   else if (mode === 'edu' && FORBIDDEN.some(w => question.includes(w))) type = '禁答引導';
   else {
     hits = retrieve(question, role);

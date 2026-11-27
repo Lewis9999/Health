@@ -108,6 +108,7 @@ route('audit', {
   render(el) {
     const failed = DB.records.filter(r => !r.ok);
     el.innerHTML = `${card('查閱他人健康資料', table(['時間', '查閱人', '對象編號', '內容'], DB.accessLog.slice(0, 50).map(a => [a.time, esc(userName(a.user)), a.subject, esc(a.what)]), '尚無紀錄（以照護者身分查看個案後再回來看）'))}
+      ${card('諮詢紅旗提示紀錄', table(['時間', '對象編號', '步驟', '看到提示後'], DB.redFlagLog.map(a => [a.time, a.subject, a.stage, a.sent ? '仍送出' : '未送出']), '尚無紀錄') + '<p class="small text-muted mt-2 mb-0">只記時間、對象、步驟與是否送出，不記諮詢內容與命中的詞。</p>')}
       ${card('匯出紀錄', table(['時間', '匯出人', '名稱', '筆數'], DB.exportLog.map(a => [a.time, esc(userName(a.user)), esc(a.name), a.rows])))}
       ${card('被拒絕的量測請求', table(['時間', '使用者', '原因'], DB.blocked.map(a => [a.time, esc(userName(a.user)), esc(a.reason)])))}
       ${card('失敗的量測（不含影片）', table(['時間', '對象編號', '情境', '原因'], failed.map(r => [r.time, r.subject, r.context, esc(r.error)])))}
