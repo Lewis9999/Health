@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>健康平台雛型</title>
+  <link href="assets/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+  <link href="assets/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
+  <link href="css/proto.css" rel="stylesheet">
+</head>
+<body>
+  <header class="topbar">
+    <button type="button" class="rail-toggle" data-act="toggleSidebar" aria-label="開合模組選單" aria-controls="rail"><i class="bi bi-list" aria-hidden="true"></i></button>
+    <a href="#/home" class="brand"><i class="bi bi-flower1" aria-hidden="true"></i>健康平台</a>
+    <nav class="modtabs" id="modtabs" aria-label="系統模組"></nav>
+    <div class="tools">
+      <span class="proto-tag">雛型，虛構資料</span>
+      <button type="button" class="btn btn-outline-secondary btn-sm" data-act="toggleBig" title="大字高對比（NFR-09）" aria-label="大字高對比"><i class="bi bi-type" aria-hidden="true"></i> <span>大字</span></button>
+      <label for="persona" class="small text-muted text-nowrap">目前身分</label>
+      <select id="persona" class="form-select form-select-sm persona-select" aria-label="目前身分"></select>
+      <button type="button" class="btn btn-outline-danger btn-sm text-nowrap" data-act="reset" title="重置資料" aria-label="重置資料"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> <span>重置資料</span></button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <nav class="rail" id="rail" aria-label="模組內頁面"></nav>
+    <main class="main">
+      <div class="pageband">
+        <h1 id="page-title"></h1>
+        <div class="tags" id="page-tags"></div>
+        <button type="button" class="feedback-btn no-print" data-act="openFeedback"><i class="bi bi-chat-left-text" aria-hidden="true"></i> 意見回饋</button>
+      </div>
+      <section id="view" class="section content"></section>
+    </main>
+  </div>
+
+  <aside class="guide no-print" id="guide" aria-label="展示引導" hidden></aside>
+
+  <div class="modal fade" id="modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modal-title"></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
+        </div>
+        <div class="modal-body" id="modal-body"></div>
+        <div class="modal-footer" id="modal-foot"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toasts" role="status" aria-live="polite"></div>
+
+  <script src="assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+  <script src="assets/vendor/chartjs/chart.umd.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/core.js"></script>
+  <script src="js/views-measure.js"></script>
+  <script src="js/views-care.js"></script>
+  <script src="js/views-admin.js"></script>
+  <script src="js/views-commerce.js"></script>
+  <script src="js/views-assistant.js"></script>
+  <script src="js/modules.js"></script>
+  <script src="js/extras.js"></script>
+  <script>App.start();</script>
+</body>
+</html>
