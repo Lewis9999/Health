@@ -10,28 +10,55 @@ function writePref(storage, key, value) {
 }
 
 /* ---------- 待辦摘要 ---------- */
-/** 只列目前身分能處理的事項；只給件數，不含個人資料。 */
+/** 只列目前身分能處理的事項。首頁可能被旁人看到，所以只給件數、狀態與時間，
+    不放姓名、對象編號、指標名稱或任何健康狀況。tag 有值且 urgent 為真時才用紅色。 */
 function todoItems(u = me()) {
   const list = [];
-  const add = (to, label, count) => { if (count && canOpen(to, u)) list.push({ to, label, count }); };
+  const add = (to, label, count, extra = {}) => { if (count && canOpen(to, u)) list.push({ to, label, count, note: '', tag: '待辦', urgent: false, ...extra }); };
   const ids = visibleSubjects(u).map(s => s.id);
-  if (u.role === 'subject') add('consent', '尚未同意量測', activeConsent(u.subject) ? 0 : 1);
-  add('daycare', '今日需要關心的長輩', visibleSubjects(u).filter(s => s.program === 'daycare' && careReasons(s).length).length);
-  add('alerts', '未結案的警示', DB.alerts.filter(a => ids.includes(a.subject) && a.status !== '已結案').length);
-  add('products', '等你審核的商品', DB.products.filter(p => !reviewBlock(p)).length);
-  if (['merch', 'pro', 'legal'].includes(u.role)) add('products', '即將到期或逾期的商品複審', DB.products.filter(reviewDue).length);
-  add('rules', '等你審核的推薦規則', DB.rules.filter(r => !reviewBlock(r)).length);
-  if (u.role === 'pro' && u.qualUntil >= DB.today) add('consult', '待回覆的諮詢', DB.consults.filter(c => c.status === '待回覆').length);
-  if (u.role === 'pro' && u.qualUntil >= DB.today) add('consult', '含緊急關鍵字的待回覆諮詢', DB.consults.filter(consultUrgent).length);
-  if (u.role === 'merch') add('orders', '待出貨的訂單', DB.orders.filter(o => o.status === '已付款・待出貨').length);
-  if (u.role !== 'subject') add('adverse', '尚未結案的不良反應與客訴', DB.adverse.filter(a => a.status !== '已結案').length);
-  if (u.role === 'legal') add('kb', '等你審核的知識文件', DB.kbDocs.filter(d => d.status === '待法遵審核' && d.maintainer !== u.id).length);
-  return list;
+  /** 最早一件的時間（月-日 時:分）。 */
+  const oldest = (items, timeOf = x => x.time) => { const t = items.map(timeOf).filter(Boolean).sort()[0]; return t ? `最早一件 ${t.slice(5)}` : ''; };
+  const byStatus = (items, names) => names.map(n => `${n} ${items.filter(x => x.status === n).length}`).join('、');
+  const join = (...parts) => parts.filter(Boolean).join('；');
+
+  if (u.role === 'subject') add('consent', '尚未同意量測', activeConsent(u.subject) ? 0 : 1, { note: '簽署同意後才能開始量測' });
+  add('daycare', '今日需要關心的長輩', visibleSubjects(u).filter(s => s.program === 'daycare' && careReasons(s).length).length, { tag: '關懷', note: '名單與原因請到長照據點頁查看' });
+
+  const alerts = DB.alerts.filter(a => ids.includes(a.subject) && a.status !== '已結案');
+  const overdue = alerts.filter(a => a.reminded || (a.notified && Date.now() - a.createdAt > DB.settings.overdueHours * 3600000)).length;
+  add('alerts', '未結案的警示', alerts.length, { tag: overdue ? `逾時 ${overdue} 件` : '警示', urgent: true, safety: true, note: join(byStatus(alerts, ['待複測', '待處理', '處理中']), oldest(alerts)) });
+
+  add('products', '等你審核的商品', DB.products.filter(p => !reviewBlock(p)).length, { note: '不得自審，兩關不得同一人' });
+  if (['merch', 'pro', 'legal'].includes(u.role)) {
+    const due = DB.products.filter(reviewDue), late = due.filter(p => reviewDaysLeft(p) < 0).length;
+    add('products', '即將到期或逾期的商品複審', due.length, { tag: late ? '逾期' : '即將到期', urgent: !!late, note: `逾期 ${late} 件、即將到期 ${due.length - late} 件` });
+  }
+  add('rules', '等你審核的推薦規則', DB.rules.filter(r => !reviewBlock(r)).length, { note: '不得自審，兩關不得同一人' });
+
+  if (u.role === 'pro' && u.qualUntil >= DB.today) {
+    const waiting = DB.consults.filter(c => c.status === '待回覆');
+    const since = c => c.thread.length ? c.thread[c.thread.length - 1].time : c.time;
+    add('consult', '待回覆的諮詢', waiting.length, { note: oldest(waiting, since) });
+    const urgent = waiting.filter(consultUrgent);
+    add('consult', '含緊急關鍵字的待回覆諮詢', urgent.length, { tag: '優先', urgent: true, safety: true, note: join('本人看過 119 提示後仍送出', oldest(urgent, since)) });
+  }
+  if (u.role === 'merch') {
+    const ship = DB.orders.filter(o => o.status === '已付款・待出貨');
+    add('orders', '待出貨的訂單', ship.length, { note: oldest(ship) });
+  }
+  if (u.role !== 'subject') {
+    const cases = DB.adverse.filter(a => a.status !== '已結案');
+    add('adverse', '尚未結案的不良反應與客訴', cases.length, { note: join(byStatus(cases, ['待受理', '處理中']), oldest(cases)) });
+  }
+  if (u.role === 'legal') add('kb', '等你審核的知識文件', DB.kbDocs.filter(d => d.status === '待法遵審核' && d.maintainer !== u.id).length, { note: '維護人不得審自己的文件' });
+  // 與人身安全有關的最前面，其次是其他紅色項目（例如複審逾期），其餘維持原順序
+  const rank = t => t.safety ? 2 : t.urgent ? 1 : 0;
+  return list.sort((a, b) => rank(b) - rank(a));
 }
 function todoHtml() {
   const list = todoItems();
   return `<section class="todo no-print" aria-labelledby="todo-title"><h2 id="todo-title">待辦摘要</h2>${list.length
-    ? `<ul>${list.map(t => `<li><a href="#/${t.to}"><span>${t.label}</span><strong>${t.count}</strong></a></li>`).join('')}</ul>`
+    ? `<ul>${list.map(t => `<li><a href="#/${t.to}" class="${t.urgent ? 'urgent' : ''}"><span class="todo-top"><strong>${t.count}</strong><span class="todo-tag">${t.tag}</span></span><span class="todo-label">${t.label}</span>${t.note ? `<span class="todo-note">${t.note}</span>` : ''}</a></li>`).join('')}</ul>`
     : '<p class="mb-0 text-muted">這個身分目前沒有待辦事項。</p>'}</section>`;
 }
 
@@ -108,7 +135,7 @@ function renderGuide() {
   el.innerHTML = `<div class="guide-head"><strong>展示引導：${guide.title}</strong><span>${i + 1}／${steps.length}</span>
       <button type="button" data-act="guideMin" aria-expanded="${!guide.min}" aria-label="${guide.min ? '展開引導' : '收合引導'}"><i class="bi bi-chevron-${guide.min ? 'up' : 'down'}" aria-hidden="true"></i></button>
       <button type="button" data-act="guideClose" aria-label="結束引導"><i class="bi bi-x-lg" aria-hidden="true"></i></button></div>
-    ${guide.min ? '' : `<div class="guide-body"><p>${text}</p><p class="text-muted small">身分：${esc(userName(user))}｜頁面：${ROUTES[to].title}${i === 0 ? '<br>開始前建議先按「重置資料」，重置後引導仍會保留。' : ''}</p>
+    ${guide.min ? '' : `<div class="guide-body"><p>${text}</p><p class="text-muted small">身分：${esc(userName(user))}｜頁面：${ROUTES[to].title}${i === 0 ? '<br>開始前建議先到「展示工具」按「重置資料」，重置後引導仍會保留。' : ''}</p>
       <div class="guide-foot"><button type="button" class="btn btn-sm btn-outline-secondary" data-act="guidePrev" ${i === 0 ? 'disabled' : ''}>上一步</button>
       <button type="button" class="btn btn-sm btn-outline-primary" data-act="goAs" data-user="${user}" data-to="${to}">切到這一步的畫面</button>
       <button type="button" class="btn btn-sm btn-primary" data-act="${i === steps.length - 1 ? 'guideClose' : 'guideNext'}">${i === steps.length - 1 ? '完成' : '下一步'}</button></div></div>`}`;
@@ -152,8 +179,11 @@ Object.assign(ACTIONS, {
 });
 
 /* ---------- 總覽橫幅收合 ---------- */
-const BANNER_KEY = 'health-proto-banner-hidden';
-let bannerHidden = readPref('localStorage', BANNER_KEY, false);
-const bannerHtml = () => `<div class="banner-bar no-print"><button type="button" class="btn btn-link btn-sm" data-act="toggleBanner" aria-expanded="${!bannerHidden}">${bannerHidden ? '顯示插畫' : '收合插畫'}</button></div>
-  ${bannerHidden ? '' : '<div class="home-banner no-print"><img src="assets/img/module-overview-nature.svg" alt="" width="3200" height="900"></div>'}`;
-ACTIONS.toggleBanner = () => { bannerHidden = !bannerHidden; writePref('localStorage', BANNER_KEY, bannerHidden); App.render(); };
+// 內部人員每天重複使用，預設收合；受測者預設展開。手動切換後依兩種身分分別記住。
+const BANNER_KEY = 'health-proto-banner';
+let bannerPref = readPref('localStorage', BANNER_KEY, {});
+const bannerGroup = () => me().role === 'subject' ? 'subject' : 'staff';
+const bannerHidden = () => bannerPref[bannerGroup()] ?? bannerGroup() === 'staff';
+const bannerHtml = () => `<div class="banner-bar no-print"><button type="button" class="btn btn-link btn-sm" data-act="toggleBanner" aria-expanded="${!bannerHidden()}">${bannerHidden() ? '顯示插畫' : '收合插畫'}</button></div>
+  ${bannerHidden() ? '' : '<div class="home-banner no-print"><img src="assets/img/module-overview-nature.svg" alt="" width="3200" height="900"></div>'}`;
+ACTIONS.toggleBanner = () => { bannerPref = { ...bannerPref, [bannerGroup()]: !bannerHidden() }; writePref('localStorage', BANNER_KEY, bannerPref); App.render(); };

@@ -23,10 +23,26 @@ $failed = $false
 try {
     foreach ($w in $Width) {
         $out = Join-Path $work "out-$w.txt"
-        Start-Process $edge -Wait -RedirectStandardOutput $out -RedirectStandardError (Join-Path $work "err-$w.txt") -ArgumentList @(
+        # Do not use -Wait: it has hung for hours after the results were already written.
+        $proc = Start-Process $edge -PassThru -RedirectStandardOutput $out -RedirectStandardError (Join-Path $work "err-$w.txt") -ArgumentList @(
             '--headless', '--disable-gpu', '--allow-file-access-from-files', "--user-data-dir=`"$work\profile-$w`"",
             '--virtual-time-budget=900000', '--window-size=1500,1000', '--dump-dom', "`"${page}?runner=1&w=$w&only=$Only&app=$app`"")
-        $m = [regex]::Match([IO.File]::ReadAllText($out, [Text.Encoding]::UTF8), 'RESULT(\{.*\})END', 'Singleline')
+        $deadline = (Get-Date).AddMinutes(10)
+        $exitedAt = $null
+        do {
+            Start-Sleep -Seconds 2
+            $text = ''
+            try {
+                $stream = [IO.File]::Open($out, 'Open', 'Read', 'ReadWrite')
+                try { $text = (New-Object IO.StreamReader($stream, [Text.Encoding]::UTF8)).ReadToEnd() } finally { $stream.Dispose() }
+            } catch {}
+            $m = [regex]::Match($text, 'RESULT(\{.*\})END', 'Singleline')
+            if ($proc.HasExited -and -not $exitedAt) { $exitedAt = Get-Date }
+            # The launcher can exit slightly before the output is complete, so allow a grace period.
+            $gaveUp = (Get-Date) -gt $deadline -or ($exitedAt -and (Get-Date) -gt $exitedAt.AddSeconds(30))
+        } until ($m.Success -or $gaveUp)
+        # Only stops the browser instance started above.
+        if (-not $proc.WaitForExit(5000)) { try { $proc.Kill() } catch {} }
         if (-not $m.Success) { Write-Host "Width ${w}: no result (the test page did not finish)."; $failed = $true; continue }
         $r = [Net.WebUtility]::HtmlDecode($m.Groups[1].Value) | ConvertFrom-Json
 

@@ -195,6 +195,7 @@ function modal(title, body, foot = '<button class="btn btn-secondary" data-bs-di
   bootstrap.Modal.getOrCreateInstance($('#modal')).show();
 }
 const closeModal = () => bootstrap.Modal.getInstance($('#modal'))?.hide();
+const closeDemoTools = () => bootstrap.Offcanvas.getInstance($('#demoDrawer'))?.hide();
 
 let charts = [];
 function chart(id, config) {
@@ -224,14 +225,16 @@ const App = {
     if (window.innerWidth < 1200) document.body.classList.remove('toggle-sidebar');
 
     $('#persona').innerHTML = DB.users.map(x => `<option value="${x.id}"${x.id === u.id ? ' selected' : ''}>${esc(ROLE_NAMES[x.role])}｜${esc(x.name)}</option>`).join('');
+    $('#who').innerHTML = `${esc(ROLE_NAMES[u.role])}<span class="who-name">｜${esc(u.name)}</span>`;
+    renderDemoTools();
     renderNav(path in ROUTES ? path : 'home');
 
     $('#page-title').textContent = def.title;
-    $('#page-tags').innerHTML = [def.stage ? `<span>階段 ${def.stage}</span>` : '', def.fr ? `<span>${def.fr}</span>` : ''].join('');
+    $('#page-tags').innerHTML = [def.about ? `<span>${def.about}</span>` : '', def.stage ? `<span>階段 ${def.stage}</span>` : '', def.fr ? `<span>${def.fr}</span>` : ''].join('');
     const el = $('#view');
     renderGuide();
     if (!def.roles.includes(u.role)) {
-      el.innerHTML = card('', `<div class="alert alert-warning mb-0"><i class="bi bi-shield-lock me-1"></i>目前身分「${ROLE_NAMES[u.role]}」沒有此功能權限。可用身分：${def.roles.map(r => ROLE_NAMES[r]).join('、')}。請由右上角切換。</div>`);
+      el.innerHTML = card('', `<div class="alert alert-warning mb-0"><i class="bi bi-shield-lock me-1"></i>目前身分「${ROLE_NAMES[u.role]}」沒有此功能權限。可用身分：${def.roles.map(r => ROLE_NAMES[r]).join('、')}。請由右上角「展示工具」切換身分。</div>`);
       return;
     }
     def.render(el);
@@ -257,8 +260,8 @@ const App = {
     document.addEventListener('click', e => fire(e, 'data-act'));
     document.addEventListener('change', e => fire(e, 'data-change'));
     document.addEventListener('submit', e => { e.preventDefault(); fire(e, 'data-submit'); });
-    $('#persona').addEventListener('change', e => { DB.currentUser = e.target.value; closeModal(); Object.keys(view).forEach(k => delete view[k]); App.refresh(); });
-    window.addEventListener('hashchange', () => { closeModal(); App.render(); window.scrollTo(0, 0); });
+    $('#persona').addEventListener('change', e => { DB.currentUser = e.target.value; closeDemoTools(); closeModal(); Object.keys(view).forEach(k => delete view[k]); App.refresh(); });
+    window.addEventListener('hashchange', () => { closeDemoTools(); closeModal(); App.render(); window.scrollTo(0, 0); });
     App.render();
   }
 };
@@ -267,11 +270,13 @@ const openAlertById = id => DB.alerts.find(a => a.id === id && a.status !== '已
 Object.assign(ACTIONS, {
   toggleSidebar: () => document.body.classList.toggle('toggle-sidebar'),
   toggleBig: () => document.documentElement.classList.toggle('big'),
+  openDemoTools: () => bootstrap.Offcanvas.getOrCreateInstance($('#demoDrawer')).show(),
   reset: () => {
+    closeDemoTools();
     modal('重置示範資料', '<p class="mb-0">清除你在雛型中的所有操作，回到初始示範資料。</p>',
       '<button class="btn btn-secondary" data-bs-dismiss="modal">取消</button><button class="btn btn-danger" data-act="resetConfirm">重置</button>');
   },
   resetConfirm: () => { try { localStorage.removeItem(STORE_KEY); } catch (e) { /* 略過 */ } location.hash = '#/home'; location.reload(); },
-  goAs: el => { if (el.dataset.demo) setGuide({ title: DEMOS[+el.dataset.demo].title, step: 0 }); closeModal(); DB.currentUser = el.dataset.user; Object.keys(view).forEach(k => delete view[k]); save(); if (location.hash === '#/' + el.dataset.to) App.render(); else location.hash = '#/' + el.dataset.to; },
+  goAs: el => { if (el.dataset.demo) setGuide({ title: DEMOS[+el.dataset.demo].title, step: 0 }); closeDemoTools(); closeModal(); DB.currentUser = el.dataset.user; Object.keys(view).forEach(k => delete view[k]); save(); if (location.hash === '#/' + el.dataset.to) App.render(); else location.hash = '#/' + el.dataset.to; },
   setView: el => { view[el.dataset.key] = el.type === 'checkbox' ? el.checked : (el.dataset.value ?? el.value); App.render(); }
 });

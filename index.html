@@ -14,11 +14,9 @@
     <a href="#/home" class="brand"><i class="bi bi-flower1" aria-hidden="true"></i>健康平台</a>
     <nav class="modtabs" id="modtabs" aria-label="系統模組"></nav>
     <div class="tools">
-      <span class="proto-tag">雛型，虛構資料</span>
+      <span class="proto-tag"><span class="proto-long">雛型，</span>虛構資料</span>
       <button type="button" class="btn btn-outline-secondary btn-sm" data-act="toggleBig" title="大字高對比（NFR-09）" aria-label="大字高對比"><i class="bi bi-type" aria-hidden="true"></i> <span>大字</span></button>
-      <label for="persona" class="small text-muted text-nowrap">目前身分</label>
-      <select id="persona" class="form-select form-select-sm persona-select" aria-label="目前身分"></select>
-      <button type="button" class="btn btn-outline-danger btn-sm text-nowrap" data-act="reset" title="重置資料" aria-label="重置資料"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> <span>重置資料</span></button>
+      <button type="button" class="demo-btn" data-act="openDemoTools" aria-controls="demoDrawer" aria-haspopup="dialog"><i class="bi bi-sliders" aria-hidden="true"></i><span class="demo-btn-text"><small>展示工具</small><span id="who"></span></span></button>
     </div>
   </header>
 
@@ -27,6 +25,7 @@
     <main class="main">
       <div class="pageband">
         <h1 id="page-title"></h1>
+        <span class="print-only">雛型，虛構資料</span>
         <div class="tags" id="page-tags"></div>
         <button type="button" class="feedback-btn no-print" data-act="openFeedback"><i class="bi bi-chat-left-text" aria-hidden="true"></i> 意見回饋</button>
       </div>
@@ -35,6 +34,23 @@
   </div>
 
   <aside class="guide no-print" id="guide" aria-label="展示引導" hidden></aside>
+
+  <div class="offcanvas offcanvas-end demo-drawer no-print" id="demoDrawer" tabindex="-1" aria-labelledby="demoDrawerTitle">
+    <div class="offcanvas-header">
+      <h2 class="offcanvas-title" id="demoDrawerTitle">展示工具</h2>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="關閉"></button>
+    </div>
+    <div class="offcanvas-body">
+      <p class="small text-muted">這裡的功能只供展示雛型使用，正式系統不會提供。</p>
+      <label for="persona" class="form-label fw-bold">目前身分</label>
+      <select id="persona" class="form-select mb-3"></select>
+      <button type="button" class="btn btn-outline-danger btn-sm" data-act="reset"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> 重置資料</button>
+      <h3 class="drawer-title">展示情境</h3>
+      <p class="small text-muted">按下按鈕會切換成指定身分、開啟對應頁面，並在左下角顯示逐步引導。</p>
+      <div id="demoDrawerList"></div>
+      <div id="demoDrawerAbout"></div>
+    </div>
+  </div>
 
   <div class="modal fade" id="modal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
@@ -60,6 +76,7 @@
   <script src="js/views-admin.js"></script>
   <script src="js/views-commerce.js"></script>
   <script src="js/views-assistant.js"></script>
+  <script src="js/queue.js"></script>
   <script src="js/views-permissions.js"></script>
   <script src="js/views-flows.js"></script>
   <script src="js/modules.js"></script>

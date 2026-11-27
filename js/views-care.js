@@ -8,10 +8,11 @@ route('alerts', {
     const list = DB.alerts.filter(a => ids.includes(a.subject));
     const mine = DB.notifications.filter(n => n.to === me().id && openAlertById(n.alert));
     const overdue = a => a.status !== '已結案' && a.notified && Date.now() - a.createdAt > DB.settings.overdueHours * 3600000;
+    const q = workQueue('alerts', list, WORK.alert);
     el.innerHTML = `<div class="alert alert-danger py-2"><i class="bi bi-telephone-fill me-1"></i>當事人身體不適時直接啟動緊急應變（119、現場急救人員分機 0000 示範），<strong>系統不能當作唯一的安全監控手段</strong>。</div>
       ${card('我的站內通知', mine.length ? `<ul class="mb-0">${mine.map(n => `<li>${n.time}　${esc(n.text)}</li>`).join('')}</ul>` : '<span class="text-muted">沒有待處理通知</span>')}
-      ${card('警示事件', table(['編號', '時間', '對象', '指標', '狀態', ''], list.map(a => [a.id, a.time, esc(subjectById(a.subject).name), a.metrics.map(c => esc(metricBy(c).name)).join('、'), sBadge(a.status) + (overdue(a) || a.reminded ? ' ' + badge('逾時', 'danger') : ''), `<button class="btn btn-sm btn-primary" data-act="openAlertDetail" data-id="${a.id}">處理</button>`]), '目前沒有警示'),
-        '<button class="btn btn-sm btn-outline-secondary" data-act="remind">模擬逾時提醒</button>')}
+      ${card('警示事件', q.wrap(`<div class="sticky-action">${table(['編號', '狀態', '時間', '對象', '指標', ''], q.items.map(a => [a.id + q.tag(a), sBadge(a.status) + (overdue(a) || a.reminded ? ' ' + badge('逾時', 'danger') : ''), a.time, esc(subjectById(a.subject).name), a.metrics.map(c => esc(metricBy(c).name)).join('、'), openButton('openAlertDetail', a.id, WORK.alert(a))]), '目前沒有警示')}</div>`),
+        q.tools + '<button class="btn btn-sm btn-outline-secondary" data-act="remind">模擬逾時提醒</button>')}
       ${mailCard()}
       <p class="small text-muted">警示與處置畫面不放任何商品或廣告（FR-85）。品質不合格的量測只提示重測，不產生警示。</p>`;
   }
@@ -149,7 +150,7 @@ route('worksite', {
     const done = (sid, ctx) => recordsOf(sid).find(r => r.time.startsWith(DB.today) && r.context === ctx);
     const missing = people.filter(s => !done(s.id, '上工前'));
     people.forEach(s => logAccess(s.id, '工地排程'));
-    el.innerHTML = `<div class="alert alert-warning py-2 small">WBGT 分級與處置建議為示範值，公式與分級須依現行職安規定並由職安人員確認。血壓、血氧、乳酸完成場域驗證前，不用於停工等安全決定。數值不得用於考核或人事決定。</div>
+    el.innerHTML = `${pageNote('分級與建議為示範值；<strong>未完成場域驗證前不用於停工等安全決定，數值不得用於考核或人事決定</strong>。', 'WBGT 分級與處置建議為示範值，公式與分級須依現行職安規定並由職安人員確認。血壓、血氧、乳酸完成場域驗證前，不用於停工等安全決定。數值不得用於考核或人事決定。')}
       <div class="row"><div class="col-lg-5">${card('環境與熱危害', `<div class="stat">WBGT ${latest.wbgt} °C <span class="badge text-bg-${color} fs-6">${level}</span></div><div>氣溫 ${latest.temp} °C｜濕度 ${latest.rh}%｜${esc(latest.site)}｜${latest.time}（${latest.source}）</div><div class="cite mt-2">${advice}</div>
         <form data-submit="saveWbgt" class="row g-2 mt-2"><div class="col-4"><input class="form-control" type="number" step="0.1" min="0" max="50" name="wbgt" placeholder="WBGT" required></div><div class="col-3"><input class="form-control" type="number" step="0.1" name="temp" placeholder="氣溫" required></div><div class="col-3"><input class="form-control" type="number" min="0" max="100" name="rh" placeholder="濕度%" required></div><div class="col-2"><button class="btn btn-primary w-100">記錄</button></div></form>`)}
         ${card('環境讀數紀錄', table(['時間', 'WBGT', '氣溫', '濕度', '來源'], DB.wbgt.slice(0, 6).map(w => [w.time, w.wbgt, w.temp, w.rh + '%', w.source])))}</div>
@@ -190,7 +191,7 @@ route('daycare', {
     const watch = people.map(s => [s, careReasons(s)]).filter(([, r]) => r.length);
     const families = people.filter(s => DB.family[s.id]);
     const msgs = DB.familyMsgs.filter(m => people.some(s => s.id === m.subject));
-    el.innerHTML = `<div class="alert alert-warning py-2 small">關懷提示只用來決定「今天先關心誰」，不是照護或醫療判斷。數值為估測值，完成場域驗證前不作為照護決定。家屬通知不含任何生理數值。</div>
+    el.innerHTML = `${pageNote('關懷提示只決定先關心誰，<strong>不是照護或醫療判斷</strong>。', '關懷提示只用來決定「今天先關心誰」，不是照護或醫療判斷。數值為估測值，完成場域驗證前不作為照護決定。家屬通知不含任何生理數值。')}
       <div class="row"><div class="col-lg-5">${card(`今日關懷名單（${watch.length} 人）`, watch.length ? `<ul class="list-unstyled mb-0">${watch.map(([s, r]) => `<li class="mb-2"><strong>${esc(s.name)}</strong><div>${r.map(x => badge(x, 'warning')).join(' ')}</div></li>`).join('')}</ul>` : '<span class="text-muted">目前沒有需要優先關心的長輩</span>')}
         ${card('家屬通知（FR-54，模擬）', `${table(['長輩', '家屬', '檢視授權', ''], families.map(s => { const f = DB.family[s.id]; return [esc(s.name), esc(f.name), `<label class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" data-change="familyView" data-sid="${s.id}" ${f.view ? 'checked' : ''}><span class="form-check-label small">${f.view ? '已授權' : '未授權'}</span></label>`, `<button class="btn btn-sm btn-outline-primary text-nowrap" data-act="familyNotify" data-sid="${s.id}">通知家屬</button>`]; }))}
           <p class="small text-muted mt-2">授權依本人或代簽人的書面授權登錄。通知只有本週報到次數。</p>${table(['時間', '收件家屬', '內容'], msgs.slice(0, 6).map(m => [m.time, esc(m.to), esc(m.text)]), '尚無通知紀錄')}`)}</div>

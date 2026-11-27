@@ -95,13 +95,14 @@ route('products', {
   title: '商品主檔與審核', icon: 'box-seam', roles: ['merch', 'pro', 'legal', 'sysadmin'], stage: '3', fr: 'FR-80、81、89、91～95',
   render(el) {
     expireProducts();
-    el.innerHTML = `<div class="alert alert-info py-2 small">流程：草稿 → 送審 → 專業審核 → 法遵審核 → 核准 → 發布。修改已發布商品只改草稿版本，前台仍顯示上一個核准版本。可切換身分走完流程（建議用「示範鎂鉀膳食纖維包」）。法規用語需法務確認。</div>
+    const q = workQueue('products', DB.products, WORK.review);
+    el.innerHTML = `${pageNote('修改已發布商品只改草稿，前台仍顯示上一個核准版本。', '流程：草稿 → 送審 → 專業審核 → 法遵審核 → 核准 → 發布。修改已發布商品只改草稿版本，前台仍顯示上一個核准版本。可切換身分走完流程（建議用「示範鎂鉀膳食纖維包」）。法規用語需法務確認。')}
       ${reviewDueNotice()}
-      ${card('商品清單', table(['編號', '名稱', '類別', '管道', '版本', '審核狀態', '前台', '下次複審', ''], DB.products.map(p => [
-        p.id, esc(p.draft.name), p.draft.type, p.draft.channel, 'v' + p.version, sBadge(p.status),
+      ${card('商品清單', q.wrap(table(['編號', '名稱', '類別', '管道', '版本', '審核狀態', '前台', '下次複審', ''], q.items.map(p => [
+        p.id + q.tag(p), esc(p.draft.name), p.draft.type, p.draft.channel, 'v' + p.version, sBadge(p.status),
         liveProduct(p) ? badge('上架中', 'success') : p.offline ? badge('已下架', 'dark') : badge('未上架', 'secondary'), p.nextReview + reviewDueBadge(p),
-        `<button class="btn btn-sm btn-primary" data-act="openProduct" data-id="${p.id}">開啟</button>`])),
-        me().role === 'merch' ? '<button class="btn btn-sm btn-success" data-act="newProduct">新增商品</button>' : '')}`;
+        openButton('openProduct', p.id, WORK.review(p), me().role === 'merch' ? '開啟' : '查看')]))),
+        q.tools + (me().role === 'merch' ? '<button class="btn btn-sm btn-success" data-act="newProduct">新增商品</button>' : ''))}`;
   }
 });
 
@@ -183,8 +184,10 @@ Object.assign(ACTIONS, {
 route('rules', {
   title: '推薦規則', icon: 'diagram-3', roles: ['merch', 'pro', 'legal'], stage: '3', fr: 'FR-84、91',
   render(el) {
-    el.innerHTML = `<div class="alert alert-warning py-2 small">系統固定限制，無法以規則覆寫：<strong>不依心率推薦</strong>、<strong>一律不依血氧推薦或銷售</strong>、不依單次量測、乳酸僅限運動情境、血壓達警示不推薦任何商品。</div>
-      ${DB.rules.map(r => card(`${r.id} ${esc(r.name)}（v${r.version}）`, `${flow(r.status)}<p class="mt-2">依據指標：${esc(metricBy(r.metric).name)}｜本人需選擇關注主題：${r.topic}｜商品：${r.productIds.map(i => esc(productById(i).draft.name)).join('、')}</p>${reviewHistory(r.reviews)}`,
+    const q = workQueue('rules', DB.rules, WORK.review);
+    el.innerHTML = `${pageNote('<strong>固定限制：</strong>不依心率或血氧推薦；血壓達警示不推薦任何商品。', '系統固定限制，無法以規則覆寫：<strong>不依心率推薦</strong>、<strong>一律不依血氧推薦或銷售</strong>、不依單次量測、乳酸僅限運動情境、血壓達警示不推薦任何商品。')}
+      ${q.tools ? `<div class="d-flex justify-content-end align-items-center mb-2">${q.tools}</div>` : ''}
+      ${q.wrap('')}${q.items.map(r => card(`${r.id} ${esc(r.name)}（v${r.version}）${q.tag(r)}`, `${flow(r.status)}<p class="mt-2">依據指標：${esc(metricBy(r.metric).name)}｜本人需選擇關注主題：${r.topic}｜商品：${r.productIds.map(i => esc(productById(i).draft.name)).join('、')}</p>${reviewHistory(r.reviews)}`,
         `${['已發布', '草稿', '已退回'].includes(r.status) && me().role === 'merch' ? `<button class="btn btn-sm btn-outline-primary" data-act="ruleSubmit" data-id="${r.id}">修訂並送審</button>` : ''} ${['待專業審核', '待法遵審核'].includes(r.status) ? `<button class="btn btn-sm btn-success" data-act="ruleReview" data-id="${r.id}" data-pass="1">審核通過</button> <button class="btn btn-sm btn-outline-danger" data-act="ruleReview" data-id="${r.id}">退回</button>` : ''} ${r.status === '已核准' ? `<button class="btn btn-sm btn-success" data-act="rulePublish" data-id="${r.id}">發布</button>` : ''}`)).join('')}
       <p class="small text-muted">修訂期間沿用上一個核准版本。交互作用清單由藥師維護（需另行審核）。</p>`;
   }
@@ -304,8 +307,6 @@ function commitFollowUp(draft, flags) {
 }
 const consultFlagged = c => !!(c.flags?.length || c.thread.some(m => m.flags?.length));
 const consultUrgent = c => c.status === '待回覆' && consultFlagged(c);
-/** 藥師端排序：含緊急關鍵字且待回覆的排最前面，其餘維持原順序。 */
-const proOrder = list => [...list].sort((a, b) => consultUrgent(b) - consultUrgent(a));
 const FLAG_NOTE = '「含緊急關鍵字」是本人看過 119 提示、表示目前沒有緊急狀況後仍送出的內容，請優先確認。只靠關鍵字比對，沒有標記不代表不緊急。';
 
 /* 諮詢流程：待回覆 → 已回覆 → 已結案；本人追問後回到「待回覆」。
@@ -349,9 +350,10 @@ function finishConsult(c, by, reason) {
 route('consult', {
   title: '諮詢回覆', icon: 'chat-square-text', roles: ['pro'], stage: '3', fr: 'FR-86',
   render(el) {
+    const q = workQueue('consult', DB.consults, WORK.consult, consultUrgent);
     el.innerHTML = `${qualifiedPro() ? '' : '<div class="alert alert-danger py-2 small">你的專業資格已到期：不能回覆，也不能結案。</div>'}
       ${DB.consults.some(consultFlagged) ? `<div class="alert alert-warning py-2 small">${FLAG_NOTE}</div>` : ''}
-      ${card('諮詢案件', `<div class="case-table">${table(['時間', '諮詢者', '對話紀錄', '狀態與操作'], proOrder(DB.consults).map(c => [c.time, c.subject, consultThread(c), sBadge(c.status) + proActions(c)]), '尚無諮詢（以受測者身分在推薦頁送出）')}</div><p class="small text-muted mt-2 mb-0">本人在諮詢時勾選分享的量測，到「社區藥局」頁查看。回覆後若本人沒有追問，可填寫原因結案。回覆內容不得宣稱商品功效。</p>`)}`;
+      ${card('諮詢案件', `${q.wrap(`<div class="case-table">${table(['時間', '諮詢者', '對話紀錄', '狀態與操作'], q.items.map(c => [c.time + q.tag(c), c.subject, consultThread(c), sBadge(c.status) + proActions(c)]), '尚無諮詢（以受測者身分在推薦頁送出）')}</div>`)}<p class="small text-muted mt-2 mb-0">本人在諮詢時勾選分享的量測，到「社區藥局」頁查看。回覆後若本人沒有追問，可填寫原因結案。回覆內容不得宣稱商品功效。</p>`, q.tools)}`;
   }
 });
 Object.assign(ACTIONS, {
@@ -416,10 +418,11 @@ route('pharmacy', {
       logAccess(c.subject, `藥局諮詢 ${c.id}`);
       return `<small class="text-muted">${r.time}｜${esc(r.context)}</small><br>${['SBP', 'DBP', 'HR'].map(code => valueOf(r, code) ? `${esc(metricBy(code).name)} ${valueOf(r, code).value} ${judgeMark(valueOf(r, code).judge)}` : '').filter(Boolean).join('<br>')}`;
     };
-    el.innerHTML = `<div class="alert alert-info py-2 small">民眾在藥局量測站的流程與「現場機台模式」相同：刷會員卡、結束自動清畫面，結果畫面不放商品（FR-85）。藥師只看得到本人在諮詢時勾選分享的那一次量測，本人可隨時撤回。個人化推薦只在本人帳號、另外同意後顯示，門市不依量測結果當場推銷。</div>
+    const q = workQueue('pharmacy', DB.consults, WORK.consult, consultUrgent);
+    el.innerHTML = `${pageNote('藥師只看得到本人勾選分享的那一次量測，結案或撤回後停止顯示。', '民眾在藥局量測站的流程與「現場機台模式」相同：刷會員卡、結束自動清畫面，結果畫面不放商品（FR-85）。藥師只看得到本人在諮詢時勾選分享的那一次量測，本人可隨時撤回。個人化推薦只在本人帳號、另外同意後顯示，門市不依量測結果當場推銷。')}
       ${!isPro ? '<div class="alert alert-secondary py-2 small">健康管理員只能檢視量測站與諮詢狀態；分享的量測只給藥師看，回覆也由藥師處理。</div>' : qualified ? '' : '<div class="alert alert-danger py-2 small">你的專業資格已到期：不能查看分享的量測，也不能回覆。</div>'}
       ${DB.consults.some(consultFlagged) ? `<div class="alert alert-warning py-2 small">${FLAG_NOTE}</div>` : ''}
-      ${card('諮詢與分享的量測', `<div class="case-table">${table(['時間', '諮詢者', '對話紀錄', '本人分享的量測', '狀態與操作'], proOrder(DB.consults).map(c => [c.time, c.subject, consultThread(c), shared(c), sBadge(c.status) + proActions(c)]), '尚無諮詢')}</div>`)}
+      ${card('諮詢與分享的量測', q.wrap(`<div class="case-table">${table(['時間', '諮詢者', '對話紀錄', '本人分享的量測', '狀態與操作'], q.items.map(c => [c.time + q.tag(c), c.subject, consultThread(c), shared(c), sBadge(c.status) + proActions(c)]), '尚無諮詢')}</div>`), q.tools)}
       ${card('藥局量測站', table(['裝置', '場域', '狀態', '最後使用'], DB.devices.filter(d => d.site.includes('藥局')).map(d => [d.id, esc(d.site), d.active ? badge('啟用', 'success') : badge('停用', 'secondary'), d.lastUsed || '—'])))}
       <p class="small text-muted">查看分享的量測會寫入稽核紀錄。回覆內容不得宣稱商品功效。</p>`;
   }
@@ -453,16 +456,17 @@ route('adverse', {
   render(el) {
     const mine = me().role === 'subject';
     const list = DB.adverse.filter(a => !mine || a.by === me().id);
+    const q = workQueue('adverse', list, WORK.adverse);
     const head = ['編號', '時間', '商品', '類型', '描述', '狀態', ...(mine ? ['處理結果'] : ['受理人', '結果／處置', '操作'])];
     const row = a => {
-      const base = [a.id, a.time, esc(productById(a.product).draft.name), a.kind, esc(a.text), sBadge(a.status)];
+      const base = [a.id + q.tag(a), a.time, esc(productById(a.product).draft.name), a.kind, esc(a.text), sBadge(a.status)];
       if (mine) return [...base, a.result ? closedText(a) : '尚未結案'];
       const recallBtn = a.status !== '已結案' && liveProduct(productById(a.product)) ? ` <button class="btn btn-sm btn-danger" data-act="recall" data-id="${a.id}">下架並通知已購者</button>` : '';
       const outcome = [a.result ? closedText(a) : '', a.action ? `<div class="small">${esc(a.action)}</div>` : ''].join('') || '—';
-      return [...base, a.handler ? esc(userName(a.handler)) : '—', outcome + recallBtn, `<button class="btn btn-sm btn-primary text-nowrap" data-act="adverseOpen" data-id="${a.id}">${a.status === '已結案' ? '查看' : '處理'}</button>`];
+      return [...base, a.handler ? esc(userName(a.handler)) : '—', outcome + recallBtn, openButton('adverseOpen', a.id, WORK.adverse(a))];
     };
-    el.innerHTML = `${mine ? EMERGENCY : '<div class="alert alert-secondary py-2 small">流程：待受理 → 處理中 → 已結案。結案必須填寫結果類別與給回報人的說明。誰有權結案、不良反應是否須對外通報，需法遵確認。</div>'}${card('回報', `<form data-submit="saveAdverse" class="row g-2"><div class="col-md-3"><select class="form-select" name="product" aria-label="商品">${opts(DB.products.filter(p => p.published).map(p => [p.id, p.published.name]))}</select></div><div class="col-md-2"><select class="form-select" name="kind" aria-label="類型">${opts(['不良反應', '客訴'])}</select></div><div class="col-md-5"><input class="form-control" name="text" maxlength="300" placeholder="狀況描述" aria-label="狀況描述" required></div><div class="col-md-2"><button class="btn btn-warning w-100">送出</button></div></form>`)}
-      ${card('回報清單', `<div class="case-table">${table(head, list.map(row), '尚無回報')}</div>`)}`;
+    el.innerHTML = `${mine ? EMERGENCY : pageNote('結案必須填寫結果類別與給回報人的說明。', '流程：待受理 → 處理中 → 已結案。結案必須填寫結果類別與給回報人的說明。誰有權結案、不良反應是否須對外通報，需法遵確認。')}${card('回報', `<form data-submit="saveAdverse" class="row g-2"><div class="col-md-3"><select class="form-select" name="product" aria-label="商品">${opts(DB.products.filter(p => p.published).map(p => [p.id, p.published.name]))}</select></div><div class="col-md-2"><select class="form-select" name="kind" aria-label="類型">${opts(['不良反應', '客訴'])}</select></div><div class="col-md-5"><input class="form-control" name="text" maxlength="300" placeholder="狀況描述" aria-label="狀況描述" required></div><div class="col-md-2"><button class="btn btn-warning w-100">送出</button></div></form>`)}
+      ${card('回報清單', q.wrap(`<div class="case-table">${table(head, q.items.map(row), '尚無回報')}</div>`), q.tools)}`;
   }
 });
 Object.assign(ACTIONS, {
@@ -516,7 +520,7 @@ route('shop', {
     const lines = mine.filter(c => liveProduct(productById(c.id)));
     const total = lines.reduce((s, c) => s + liveProduct(productById(c.id)).price * c.qty, 0);
     const orders = DB.orders.filter(o => o.buyer === me().id);
-    el.innerHTML = `<div class="alert alert-secondary py-2 small">一般商品展示，不依個人量測值排序。健康數據、推薦依據與問卷不傳給電商、金流、物流或供應商。</div>
+    el.innerHTML = `${pageNote('健康數據、推薦依據與問卷不傳給電商、金流、物流或供應商。', '一般商品展示，不依個人量測值排序。健康數據、推薦依據與問卷不傳給電商、金流、物流或供應商。')}
       <div class="row">${DB.products.filter(liveProduct).map(p => productCard(p)).join('')}</div>
       ${card('購物車（價格與庫存由伺服器端計算）', `${table(['商品', '單價', '數量', ''], lines.map(c => [esc(liveProduct(productById(c.id)).name), liveProduct(productById(c.id)).price, c.qty, `<button class="btn btn-sm btn-outline-danger" data-act="removeCart" data-id="${c.id}">移除</button>`]), '購物車是空的')}<div class="d-flex justify-content-between mt-2"><strong>合計 NT$ ${total}</strong><button class="btn btn-success" data-act="checkout" ${lines.length ? '' : 'disabled'}>結帳（模擬第三方支付）</button></div><p class="small text-muted mb-0">本系統不儲存卡號。</p>`)}
       ${card('我的訂單', table(['訂單', '時間', '金額', '狀態', '發票', '付款回呼模擬'], orders.map(o => [o.id, o.time, o.total, esc(o.status), o.invoice || '—',
@@ -567,9 +571,10 @@ route('orders', {
   render(el) {
     const lot = (view.lot || '').trim();
     const hit = lot ? DB.orders.filter(o => o.items.some(i => i.lot === lot)) : [];
-    el.innerHTML = `<div class="alert alert-secondary py-2 small">客服與訂單後台看不到任何生理數值。鑑賞期與食品類例外由法務確認。</div>
-      ${card('訂單後台', table(['訂單', '買家代號', '品項（批號）', '金額', '狀態', '發票', ''], DB.orders.map(o => [o.id, 'B-' + o.buyer.slice(-4), o.items.map(i => `${esc(productById(i.id).draft.name)} ×${i.qty}（${i.lot}）`).join('<br>'), o.total, esc(o.status), o.invoice || '—',
-        o.status === '已付款・待出貨' ? `<button class="btn btn-sm btn-primary" data-act="orderStep" data-id="${o.id}" data-to="已出貨">出貨</button>` : o.status === '已出貨' ? `<button class="btn btn-sm btn-outline-warning" data-act="orderStep" data-id="${o.id}" data-to="已退貨退款">退貨退款</button>` : '']), '尚無訂單（以受測者身分到商品專區下單）'))}
+    const q = workQueue('orders', DB.orders, WORK.order);
+    el.innerHTML = `${pageNote('客服與訂單後台看不到任何生理數值。', '客服與訂單後台看不到任何生理數值。鑑賞期與食品類例外由法務確認。')}
+      ${card('訂單後台', q.wrap(table(['訂單', '買家代號', '品項（批號）', '金額', '狀態', '發票', ''], q.items.map(o => [o.id + q.tag(o), 'B-' + o.buyer.slice(-4), o.items.map(i => `${esc(productById(i.id).draft.name)} ×${i.qty}（${i.lot}）`).join('<br>'), o.total, esc(o.status), o.invoice || '—',
+        o.status === '已付款・待出貨' ? `<button class="btn btn-sm btn-primary" data-act="orderStep" data-id="${o.id}" data-to="已出貨">出貨</button>` : o.status === '已出貨' ? `<button class="btn btn-sm btn-outline-warning" data-act="orderStep" data-id="${o.id}" data-to="已退貨退款">退貨退款</button>` : '']), '尚無訂單（以受測者身分到商品專區下單）')), q.tools)}
       <div class="row"><div class="col-lg-6">${card('庫存與批號', table(['商品', '批號', '庫存', '效期'], DB.products.flatMap(p => p.lots.map(l => [esc(p.draft.name), l.lot, l.qty, l.expiry]))))}</div>
       <div class="col-lg-6">${card('依批號查訂單（回收用）', `<input class="form-control mb-2" placeholder="例如 L2610B，按 Enter" value="${esc(lot)}" data-change="setView" data-key="lot">${table(['訂單', '買家代號', '狀態'], hit.map(o => [o.id, 'B-' + o.buyer.slice(-4), esc(o.status)]), lot ? '此批號沒有訂單' : '請輸入批號')}`)}</div></div>`;
   }

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>雛型待確認表</title>
+<style>
+  body { margin: 0 auto; max-width: 1000px; padding: 16px; color: #1c2b21; font: 14px/1.6 "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 22px 0 8px; }
+  .wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 640px; }
+  th, td { border: 1px solid #8a968c; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #eef0e4; }
+  .no { width: 32px; }
+  .fill { width: 22%; height: 3.2em; }
+  .who { width: 10%; }
+  tr { break-inside: avoid; }
+  h2 { break-after: avoid; }
+  @page { size: A4 landscape; margin: 12mm; }
+  @media print { body { padding: 0; max-width: none; font-size: 10.5pt; } }
+</style>
+</head>
+<body>
+<h1>健康平台雛型：待確認表</h1>
+<p>依規格書草案 v0.6 製作雛型時遇到的待決事項。「雛型目前做法」不是定案。「建議確認者」只是建議，請依實際分工調整。<br>會議日期：＿＿＿＿　出席：＿＿＿＿＿＿＿＿＿＿＿＿</p>
+
+<h2>一、規格沒有寫明的設計</h2>
+<div class="wrap"><table>
+<tr><th class="no">#</th><th>要決定的問題</th><th>雛型目前做法</th><th class="who">建議確認者</th><th class="fill">決定</th></tr>
+<tr><td>1</td><td>複測後數值恢復正常，警示如何處理？（FR-41 未定義）</td><td>仍轉「待處理」並通知，由人員確認後結案。</td><td>職安、健康管理</td><td></td></tr>
+<tr><td>2</td><td>群體分布遇到人數過少的分類，隱藏到什麼程度？</td><td>分「低於／範圍內／高於」三類；任一類少於 5 人時不繪圖，其他非零類別也不顯示。</td><td>法遵、健康管理</td><td></td></tr>
+<tr><td>3</td><td>血氧「注意」級是否停止推薦？（規格只寫「血氧異常」）</td><td>停止推薦。</td><td>醫護、法遵</td><td></td></tr>
+<tr><td>4</td><td>禁忌問卷有效期與個人基準線的取樣次數？</td><td>問卷 180 天；基準線取最近 10 次同情境量測。</td><td>藥師／營養師、醫護</td><td></td></tr>
+<tr><td>5</td><td>職場量測能否用於推薦？員工以個人身分加入的流程怎麼做？</td><td>上工前、休息後、工地場域的量測一律不用於推薦；未做加入流程。</td><td>法遵、人資</td><td></td></tr>
+<tr><td>6</td><td>知識文件需要幾關審核？（Q17）</td><td>只做法遵一關。</td><td>法遵、知識文件維護單位</td><td></td></tr>
+<tr><td>7</td><td>商品「發布」權限給誰？</td><td>暫給商品與法遵角色（正式依 EIIS 設定）。</td><td>系統管理、法遵</td><td></td></tr>
+<tr><td>8</td><td>共用機台閒置幾秒要清除？（FR-53 只要求結束後清畫面）</td><td>確認畫面 30 秒；識別畫面輸入後未按確認 30 秒清空輸入；結果畫面 15 秒。均為示範值。</td><td>職安、現場單位、法遵</td><td></td></tr>
+<tr><td>9</td><td>商品複審要提前幾天提醒？逾期要不要限制上架？（FR-95）</td><td>提前 30 天（示範值）；逾期只提醒，不自動下架。許可失效才自動下架。</td><td>法遵、商品</td><td></td></tr>
+<tr><td>10</td><td>電子郵件通知是否啟用？由誰開關？（FR-42 列為可選）</td><td>預設關閉，由健康管理員開啟；內容與站內通知相同，不含生理數值。雛型不寄出郵件。</td><td>健康管理、資訊、法遵</td><td></td></tr>
+<tr><td>11</td><td>量測同意由家屬代簽者，能否接受個人化推薦？</td><td>一律不開放。</td><td>法遵、藥師／營養師</td><td></td></tr>
+<tr><td>12</td><td>長照據點（延伸場景）：關懷提示用哪些規則？家屬能看到什麼？</td><td>超過 3 天未報到、未結案警示、填報不適、近 3 次有 2 次以上「注意」；家屬需檢視授權，只收到報到次數。</td><td>長照機構、法遵</td><td></td></tr>
+<tr><td>13</td><td>社區藥局（延伸場景）：藥師能看到多少量測資料？</td><td>只有本人在該次諮詢勾選分享的最近一次非職場量測，可撤回；查看記入稽核。</td><td>藥師、法遵</td><td></td></tr>
+<tr><td>14</td><td>不良反應與客訴由誰受理與結案？結案類別有哪些？不良反應是否須對外通報、時限多久？（FR-89）</td><td>商品、營養師／藥師、法遵都能受理與結案；結案必填類別與給回報人的說明；結案後不能重開；沒有對外通報與處理時限。</td><td>法遵、藥師／營養師</td><td></td></tr>
+<tr><td>15</td><td>專業諮詢的追問與結案規則？分享的量測在結案後如何處理？紀錄保存多久？（FR-86）</td><td>追問次數不限；本人隨時可結案，營養師／藥師須回覆後填原因才能結案；沒有逾時自動結案；結案後不能重開，分享的量測即停止顯示；對話紀錄保留。</td><td>藥師／營養師、法遵</td><td></td></tr>
+<tr><td>16</td><td>諮詢含緊急關鍵字時要完全擋下，還是確認後可送出？紅旗詞清單由誰維護？本人看到提示後沒有送出，是否要有人主動關心？</td><td>先顯示 119 提示，本人確認目前沒有緊急狀況後可送出，藥師端標記並排最前面；與知識助理共用示範詞清單（未經醫護審核）；不另外通知任何人，稽核只記時間、對象、步驟與是否送出。</td><td>醫護、藥師／營養師、法遵</td><td></td></tr>
+</table></div>
+
+<h2>二、判定門檻（需醫護審核）</h2>
+<p>展示時可能被問：模擬「血壓偏高」時，收縮壓 188 顯示「警示」，但舒張壓 112 只顯示「注意」。原因是雛型的舒張壓警示上限是 170。<br>
+下表警示級沿用舊系統程式寫死的範圍，<strong>未經醫護審核</strong>；注意級是雛型示範值。超出範圍才算（等於界限值不算）。</p>
+<div class="wrap"><table>
+<tr><th>指標</th><th>注意（低於／高於）</th><th>警示（低於／高於）</th><th class="fill">醫護建議的注意範圍</th><th class="fill">醫護建議的警示範圍</th></tr>
+<tr><td>心率（bpm）</td><td>50／90</td><td>30／100</td><td></td><td></td></tr>
+<tr><td>收縮壓（mmHg）</td><td>90／135</td><td>45／180</td><td></td><td></td></tr>
+<tr><td>舒張壓（mmHg）</td><td>55／85</td><td>30／170</td><td></td><td></td></tr>
+<tr><td>血氧（%）</td><td>94／—</td><td>88／—</td><td></td><td></td></tr>
+<tr><td>血乳酸（mmol/L）</td><td>0.5／2.0</td><td>0.2／2.3</td><td></td><td></td></tr>
+</table></div>
+<p>審核人與資格：＿＿＿＿＿＿＿＿　日期：＿＿＿＿</p>
+
+<h2>三、綠色會不會被誤認為「健康正常」（試看紀錄）</h2>
+<p>介面主題用深綠色（頁首、按鈕、機台的臉部引導框也是亮綠色），「正常」判定與部分系統狀態（已發布、已量測、檢查通過）也用綠色。<br>
+作法：請 3～5 位沒看過雛型的人，分別看「量測結果視窗」、「機台確認畫面」、「工地班別量測狀況」，<strong>先不要解釋顏色規則</strong>，問以下問題並照原話記錄。</p>
+<div class="wrap"><table>
+<tr><th>問題</th><th class="fill">受試者 1</th><th class="fill">受試者 2</th><th class="fill">受試者 3</th></tr>
+<tr><td>量測結果裡，哪些項目是沒有問題的？你怎麼判斷？</td><td></td><td></td><td></td></tr>
+<tr><td>機台確認畫面上的綠框代表什麼？現在知道自己的健康狀況了嗎？</td><td></td><td></td><td></td></tr>
+<tr><td>班別表上的綠色「已量測」代表什麼？</td><td></td><td></td><td></td></tr>
+</table></div>
+<p>若有人把介面顏色、引導框或「已量測」理解成健康正常，建議把該元件改成非綠色。<br>結論：＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿</p>
+</body>
+</html>

@@ -373,7 +373,7 @@ route('kiosk', {
       const r = DB.records.find(x => x.id === k.rid), a = k.aid ? DB.alerts.find(x => x.id === k.aid) : null;
       body = `<div class="text-start">${resultHtml(r, a)}</div><p><span id="kioskLeft">${KIOSK_RESULT_SEC}</span> 秒後自動清除畫面</p><button class="btn btn-secondary w-100" data-act="kioskClear">完成，清除畫面</button>`;
     }
-    el.innerHTML = `<div class="kiosk-box">${card('', body)}<a href="#/home" class="small" data-act="kioskExit">離開機台模式</a></div>`;
+    el.innerHTML = `<div class="kiosk-box">${card('', body)}<a href="#/home" class="small" data-act="kioskExit">離開機台模式</a><div class="mt-3"><span class="proto-tag">雛型，虛構資料</span></div></div>`;
     if (k.step === 'id') kioskWatchInput($('[name=code]', el));
     else kioskCountdown(k.step === 'ready' ? KIOSK_IDLE_SEC : KIOSK_RESULT_SEC);
   }

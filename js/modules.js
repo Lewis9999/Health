@@ -93,7 +93,25 @@ function renderNav(path) {
 
 const demoList = demos => `<ul class="demo-list">${demos.map(d => `<li style="--c:${moduleById(d.mod).color}"><div><strong>${d.title}</strong><p>${d.desc}</p></div><span class="demo-fr">${d.fr}</span><button class="btn btn-outline-secondary btn-sm" data-act="goAs" data-demo="${DEMOS.indexOf(d)}" data-user="${d.user}" data-to="${d.to}">以「${esc(userName(d.user))}」開始</button></li>`).join('')}</ul>`;
 
+/* ---------- 展示工具抽屜：展示情境與雛型說明都放這裡，頁面本身只保留產品畫面 ---------- */
+const PROTO_ABOUT = `<div class="proto-note"><strong>這是需求確認用的雛型。</strong>依《健康系統需求規格書（草案 v0.6）》製作。人名、數值、商品、許可字號與知識文件全部虛構；量測、檢索、金流、電商同步皆為模擬，未啟用攝影機，也不對外連線。畫面上的「伺服器端檢查」以瀏覽器程式模擬，不代表實際安全性。操作結果存在這台電腦的瀏覽器，按「重置資料」可還原。</div>
+  <details class="mt-3 small"><summary>本次雛型未包含的需求</summary><ul class="mt-2 mb-0">
+    <li>FR-55 視訊診療整合：規格另案評估法規，台灣法規問題暫保留不開發。</li>
+    <li>FR-54 遠距照護、FR-63 對外 API、FR-75 研究資料集（階段 4C）、FR-35 綜合分數：僅在指標主檔保留項目。</li>
+    <li>FR-24 個人化門檻（C）。</li>
+    <li>FR-60、61、125～132 等部署、網路與整合需求無法用靜態畫面驗證，僅在「地端部署與待決事項」列出。</li></ul></details>`;
+function renderDemoTools() {
+  $('#demoDrawerList').innerHTML = MODULES.filter(m => DEMOS.some(d => d.mod === m.id)).map(m => `<h4 class="demo-head" style="--c:${m.color}">${m.name}</h4>${demoList(DEMOS.filter(d => d.mod === m.id))}`).join('');
+  $('#demoDrawerAbout').innerHTML = PROTO_ABOUT;
+}
+
 /* ---------- 總覽：模組指引 ---------- */
+/** 分類多的模組占整列，其餘並排成等高卡片。快捷與收合先不做，所有可用頁面都直接列出。 */
+const isWide = m => sectionsFor(m).length >= 3;
+const dirCard = m => `<section class="dir-card${isWide(m) ? ' wide' : ''}" style="--c:${m.color};--t:${m.tint}">
+  <a class="dir-plate" href="#/${moduleHref(m)}"><i class="bi bi-${m.icon}" aria-hidden="true"></i><div><h2>${m.name}</h2><p>${m.desc}</p></div></a>
+  <div class="dir-body">${sectionsFor(m).map(s => `<div><h3>${s.name}</h3><ul>${s.pages.map(([p]) => `<li><a href="#/${p}">${ROUTES[p].title}</a> ${countBadge(p)}</li>`).join('')}</ul></div>`).join('')}</div>
+</section>`;
 route('home', {
   title: '總覽', icon: 'grid', roles: ALL,
   render(el) {
@@ -101,38 +119,27 @@ route('home', {
     const mine = MODULES.filter(m => sectionsFor(m).length), others = MODULES.filter(m => !mine.includes(m));
     el.innerHTML = `
       ${bannerHtml()}
-      <p class="lead-line">${esc(u.name)}，你目前的身分是「${ROLE_NAMES[u.role]}」。下面列出這個身分能使用的模組與頁面，其他身分請從右上角切換。</p>
+      <p class="lead-line">${esc(u.name)}，你目前的身分是「${ROLE_NAMES[u.role]}」。</p>
       ${todoHtml()}
-      <div class="directory">${mine.map(m => `<section class="dir-row" style="--c:${m.color};--t:${m.tint}">
-        <a class="dir-plate" href="#/${moduleHref(m)}"><i class="bi bi-${m.icon}" aria-hidden="true"></i><h2>${m.name}</h2><p>${m.desc}</p></a>
-        <div class="dir-body">${sectionsFor(m).map(s => `<div><h3>${s.name}</h3><ul>${s.pages.map(([p]) => `<li><a href="#/${p}">${ROUTES[p].title}</a> ${countBadge(p)}</li>`).join('')}</ul></div>`).join('')}</div>
-      </section>`).join('')}</div>
+      <h2 class="block-title">功能模組</h2>
+      <div class="directory">${[...mine.filter(isWide), ...mine.filter(m => !isWide(m))].map(dirCard).join('')}</div>
       ${others.length ? `<p class="small text-muted mt-2">這個身分沒有使用權限的模組：${others.map(m => m.name).join('、')}。</p>` : ''}
-      <h2 class="block-title">展示情境</h2>
-      <p class="small text-muted">按下按鈕會切換成指定身分、開啟對應頁面，並顯示逐步引導。</p>
-      ${MODULES.filter(m => DEMOS.some(d => d.mod === m.id)).map(m => `<h3 class="demo-head" style="--c:${m.color}">${m.name}</h3>${demoList(DEMOS.filter(d => d.mod === m.id))}`).join('')}
-      <div class="proto-note"><strong>這是需求確認用的雛型。</strong>依《健康系統需求規格書（草案 v0.6）》製作。人名、數值、商品、許可字號與知識文件全部虛構；量測、檢索、金流、電商同步皆為模擬，未啟用攝影機，也不對外連線。畫面上的「伺服器端檢查」以瀏覽器程式模擬，不代表實際安全性。操作結果存在這台電腦的瀏覽器，按「重置資料」可還原。</div>
-      <details class="mt-3"><summary>本次雛型未包含的需求</summary><ul class="mt-2 mb-0">
-        <li>FR-55 視訊診療整合：規格另案評估法規，台灣法規問題暫保留不開發。</li>
-        <li>FR-54 遠距照護、FR-63 對外 API、FR-75 研究資料集（階段 4C）、FR-35 綜合分數：僅在指標主檔保留項目。</li>
-        <li>FR-24 個人化門檻（C）。</li>
-        <li>FR-60、61、125～132 等部署、網路與整合需求無法用靜態畫面驗證，僅在「地端部署與待決事項」列出。</li></ul></details>`;
+      <p class="small text-muted mt-3 mb-0 no-print">展示情境、切換身分與雛型說明在右上角「展示工具」。</p>`;
   }
 });
 
 /* ---------- 各模組首頁 ---------- */
-const pageList = pages => `<ul class="page-list">${pages.map(([p, desc]) => `<li><a href="#/${p}"><i class="bi bi-${ROUTES[p].icon}" aria-hidden="true"></i><span class="page-name">${ROUTES[p].title}</span><span class="page-desc">${desc}</span>${countBadge(p)}<i class="bi bi-chevron-right" aria-hidden="true"></i></a></li>`).join('')}</ul>`;
-const pageCards = pages => `<ul class="page-cards">${pages.map(([p, desc]) => `<li><a href="#/${p}"><span class="page-icon"><i class="bi bi-${ROUTES[p].icon}" aria-hidden="true"></i></span><span class="page-name">${ROUTES[p].title}</span><span class="page-desc">${desc}</span>${countBadge(p)}</a></li>`).join('')}</ul>`;
+const pageEntry = (p, desc) => `<span class="page-icon"><i class="bi bi-${ROUTES[p].icon}" aria-hidden="true"></i></span><span class="page-text"><span class="page-name">${ROUTES[p].title}</span><span class="page-desc">${desc}</span></span>`;
+// 名稱與說明上下排列；右側只放「待我處理」件數
+const pageList = pages => `<ul class="page-list">${pages.map(([p, desc]) => `<li><a href="#/${p}">${pageEntry(p, desc)}<span class="page-status">${queueTag(p)}</span><i class="bi bi-chevron-right" aria-hidden="true"></i></a></li>`).join('')}</ul>`;
+const pageCards = pages => `<ul class="page-cards">${pages.map(([p, desc]) => `<li><a href="#/${p}">${pageEntry(p, desc)}${queueTag(p)}</a></li>`).join('')}</ul>`;
 for (const m of MODULES) {
   const paths = m.sections.flatMap(s => Object.keys(s.pages));
   route('m-' + m.id, {
-    title: m.name, icon: m.icon, fr: m.spec,
+    title: m.name, icon: m.icon, about: m.desc, fr: m.spec,
     roles: ALL.filter(role => paths.some(p => ROUTES[p].roles.includes(role))),
     render(el) {
-      const demos = DEMOS.filter(d => d.mod === m.id);
-      el.innerHTML = `<p class="lead-line">${m.desc}。</p>
-        ${sectionsFor(m).map(s => `<h2 class="block-title">${s.name}</h2>${(s.cards ? pageCards : pageList)(s.pages)}`).join('')}
-        ${demos.length ? `<h2 class="block-title">展示情境</h2>${demoList(demos)}` : ''}`;
+      el.innerHTML = `<div class="module-home">${sectionsFor(m).map(s => `<h2 class="block-title">${s.name}</h2>${(s.cards ? pageCards : pageList)(s.pages)}`).join('')}</div>`;
     }
   });
 }

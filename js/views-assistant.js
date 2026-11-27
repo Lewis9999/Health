@@ -58,7 +58,7 @@ function chatPage(el, mode, examples) {
   const key = 'ans_' + mode;
   if (!DB.settings.assistantOn) { el.innerHTML = card('', '<div class="alert alert-secondary mb-0">知識助理目前已停用。量測與歷史查詢不受影響（FR-123、124）。</div>'); return; }
   const a = view[key];
-  el.innerHTML = `${EMERGENCY}<div class="alert alert-info py-2 small">雛型以關鍵字比對模擬檢索，<strong>沒有連接任何語言模型</strong>。正式版全部地端執行，資料不送雲端。回答畫面不放商品。</div>
+  el.innerHTML = `${EMERGENCY}${pageNote('雛型用關鍵字比對模擬檢索，<strong>沒有連接任何語言模型</strong>。', '雛型以關鍵字比對模擬檢索，<strong>沒有連接任何語言模型</strong>。正式版全部地端執行，資料不送雲端。回答畫面不放商品。')}
     ${card('提問', `<form data-submit="askSubmit" data-mode="${mode}" class="d-flex gap-2"><input class="form-control" name="q" maxlength="200" placeholder="請輸入問題（請勿輸入真實個資）" required><button class="btn btn-primary text-nowrap">送出</button></form>
       <div class="mt-2 small">試試：${examples.map(x => `<button class="btn btn-sm btn-outline-secondary me-1 mb-1" data-act="askExample" data-mode="${mode}" data-q="${esc(x)}">${esc(x)}</button>`).join('')}</div>`)}
     ${a ? card('問：' + esc(a.log.q), answerHtml(mode, a)) : ''}`;
@@ -101,7 +101,7 @@ route('reviewassist', {
     const diffs = p.published ? fields.filter(([k]) => c[k] !== p.published[k]) : [];
     const INTERACTIONS = [['魚油', '抗凝血劑'], ['納豆激酶', '抗凝血劑'], ['Q10', '抗凝血劑'], ['紅麴', '降血脂藥'], ['鉀', '降壓藥／利尿劑、腎臟病']];
     const inter = INTERACTIONS.filter(([k]) => c.ingredients.includes(k) || c.name.includes(k));
-    el.innerHTML = `<div class="alert alert-warning py-2 small">輔助結果僅供參考，<strong>不取代任何一關人工審核</strong>。交互作用清單為示範，完整清單由藥師維護。</div>
+    el.innerHTML = `${pageNote('輔助結果僅供參考，<strong>不取代任何一關人工審核</strong>。', '輔助結果僅供參考，<strong>不取代任何一關人工審核</strong>。交互作用清單為示範，完整清單由藥師維護。')}
       ${card('選擇商品', `<select class="form-select" data-change="setView" data-key="rap">${opts(DB.products.map(x => [x.id, `${x.id} ${x.draft.name}（${x.status}）`]), view.rap)}</select>`)}
       <div class="row"><div class="col-lg-6">${card('文案疑慮', `<p>${marked || '（無文案）'}</p>${hits.length ? `<div class="text-danger small">疑似禁用詞：${hits.join('、')}</div>` : '<div class="small text-muted">關鍵詞比對未發現（不代表合規）</div>'}`)}
       ${card('交互作用查詢', table(['成分', '需注意'], inter, '示範清單中沒有比對到'))}</div>
@@ -113,9 +113,10 @@ route('kb', {
   title: '知識文件管理', icon: 'journals', roles: ['legal', 'pro', 'hadmin'], stage: 'R0～R1', fr: 'FR-110～113、117、118、124',
   render(el) {
     const role = me().role;
-    el.innerHTML = `<div class="alert alert-info py-2 small">由法遵維護與審核，維護人不得審核自己送審的內容（法遵至少兩人）。只有已核准且在效期內的版本可被檢索。健康類文件是否另需專業審核待確認（Q17）；本雛型的知識文件僅做法遵一關。廠商簡報等未驗證宣稱、個人量測紀錄不得放入知識庫。</div>
-      ${card('文件', table(['編號', '標題', '類別', '版本', '效期', '可查閱角色', '維護人', '狀態', '可檢索', ''], DB.kbDocs.map(d => [d.id, esc(d.title), d.cat, 'v' + d.version, d.expiry, `<small>${d.roles.map(r => ROLE_NAMES[r]).join('、')}</small>`, esc(userName(d.maintainer)), sBadge(d.status), isLive(d) ? '<i class="bi bi-check-circle text-success" aria-hidden="true"></i><span class="visually-hidden">可檢索</span>' : '—',
-        role !== 'legal' ? '' : d.status === '待法遵審核' ? `<button class="btn btn-sm btn-success" data-act="kbApprove" data-id="${d.id}">核准</button> <button class="btn btn-sm btn-outline-danger" data-act="kbReturn" data-id="${d.id}">退回</button>` : d.status === '已核准' ? `<button class="btn btn-sm btn-outline-danger" data-act="kbRevoke" data-id="${d.id}">撤銷</button>` : `<button class="btn btn-sm btn-outline-primary" data-act="kbSubmit" data-id="${d.id}">送審</button>`])))}
+    const q = workQueue('kb', DB.kbDocs, WORK.kb);
+    el.innerHTML = `${pageNote('只有已核准且在效期內的版本可被檢索；維護人不得審自己的文件。', '由法遵維護與審核，維護人不得審核自己送審的內容（法遵至少兩人）。只有已核准且在效期內的版本可被檢索。健康類文件是否另需專業審核待確認（Q17）；本雛型的知識文件僅做法遵一關。廠商簡報等未驗證宣稱、個人量測紀錄不得放入知識庫。')}
+      ${card('文件', q.wrap(table(['編號', '標題', '類別', '版本', '效期', '可查閱角色', '維護人', '狀態', '可檢索', ''], q.items.map(d => [d.id + q.tag(d), esc(d.title), d.cat, 'v' + d.version, d.expiry, `<small>${d.roles.map(r => ROLE_NAMES[r]).join('、')}</small>`, esc(userName(d.maintainer)), sBadge(d.status), isLive(d) ? '<i class="bi bi-check-circle text-success" aria-hidden="true"></i><span class="visually-hidden">可檢索</span>' : '—',
+        role !== 'legal' ? '' : d.status === '待法遵審核' ? `<button class="btn btn-sm btn-success" data-act="kbApprove" data-id="${d.id}">核准</button> <button class="btn btn-sm btn-outline-danger" data-act="kbReturn" data-id="${d.id}">退回</button>` : d.status === '已核准' ? `<button class="btn btn-sm btn-outline-danger" data-act="kbRevoke" data-id="${d.id}">撤銷</button>` : `<button class="btn btn-sm btn-outline-primary" data-act="kbSubmit" data-id="${d.id}">送審</button>`]))), q.tools)}
       ${card('沒有答案的提問（已移除個資，FR-117）', table(['時間', '來源', '提問'], DB.unanswered.map(u => [u.time, u.mode === 'edu' ? '衛教問答' : '作業助理', esc(u.q)])))}
       ${card('問答紀錄（含引用版本與回饋，FR-122）', table(['時間', '使用者', '提問', '結果', '引用', '回饋'], DB.aiLog.slice(0, 20).map(l => [l.time, esc(userName(l.user)), esc(stripPii(l.q)), l.type, `<small>${l.cites.map(esc).join('<br>') || '—'}</small>`, esc(l.feedback || '—')]), '尚無紀錄'),
         role === 'legal' || role === 'hadmin' ? `<button class="btn btn-sm ${DB.settings.assistantOn ? 'btn-danger' : 'btn-success'}" data-act="toggleAssistant">${DB.settings.assistantOn ? '立即停用整個助理' : '重新啟用助理'}</button>` : '')}`;

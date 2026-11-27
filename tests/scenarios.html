@@ -40,6 +40,8 @@ async function set(sel, value) {
   if (!el) { ok('找得到欄位 ' + sel, false); return; }
   el.value = value; toasts = []; el.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(500);
 }
+async function openDrawer() { await click('[data-act=openDemoTools]', '展示工具'); await sleep(300); }
+const drawerOpen = () => d.querySelector('#demoDrawer').classList.contains('show');
 async function closeM() { if (modalOpen()) { d.querySelector('#modal .btn-close').click(); await sleep(700); } }
 async function measure(scenario) {
   await closeM();
@@ -52,7 +54,9 @@ function audit(name) {
   const mix = (a, b) => [0, 1, 2].map(i => a[i] * a[3] + b[i] * (1 - a[3])).concat(1);
   const lum = c => { const v = [0, 1, 2].map(i => { const s = c[i] / 255; return s <= .03928 ? s / 12.92 : Math.pow((s + .055) / 1.055, 2.4); }); return .2126 * v[0] + .7152 * v[1] + .0722 * v[2]; };
   const bgOf = el => { const st = []; for (let e = el; e; e = e.parentElement) { const c = rgba(w.getComputedStyle(e).backgroundColor); if (c[3] > 0) { st.push(c); if (c[3] >= 1) break; } } return st.reverse().reduce((a, c) => mix(c, a), [255, 255, 255, 1]); };
-  const roots = modalOpen() ? [d.querySelector('#modal .modal-content'), d.querySelector('#toasts')] : [d.querySelector('#view'), d.querySelector('#toasts')];
+  const roots = modalOpen() ? [d.querySelector('#modal .modal-content'), d.querySelector('#toasts')] : drawerOpen() ? [d.querySelector('#demoDrawer')] : [d.querySelector('#view'), d.querySelector('#toasts')];
+  const side = d.querySelector('#demoDrawer .offcanvas-body');
+  if (drawerOpen() && side.scrollWidth - side.clientWidth > 1) res.overflow[name + '(drawer)'] = side.scrollWidth - side.clientWidth;
   for (const root of roots) for (const el of root.querySelectorAll('*')) {
     if (![...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) continue;
     if (el.closest('option,select,svg,.visually-hidden,:disabled,.disabled')) continue;
@@ -258,7 +262,8 @@ const S = {
     for (let i = 0; i < n; i++) {
       await as('u_admin'); await go('home');
       const info = run(`JSON.stringify(DEMOS[${i}])`), demo = JSON.parse(info);
-      await click(d.querySelector(`#view [data-act=goAs][data-user="${demo.user}"][data-to="${demo.to}"]`), demo.title);
+      await openDrawer();
+      await click(d.querySelector(`#demoDrawer [data-act=goAs][data-user="${demo.user}"][data-to="${demo.to}"]`), demo.title);
       ok(`「${demo.title}」按鈕開啟對應頁面`, w.location.hash === '#/' + demo.to && run('DB.currentUser') === demo.user && !view().includes('沒有此功能權限'), w.location.hash + view().slice(0, 120));
     }
   },
@@ -281,7 +286,7 @@ const S = {
     const didReload = await Promise.race([reloaded, sleep(5000)]);
     await sleep(500); w = f.contentWindow; d = w.document;
     ok('確認後頁面重新載入', didReload);
-    ok('回到總覽', w.location.hash === '#/home' && txt('#page-title').includes('模組總覽'), w.location.hash);
+    ok('回到總覽', w.location.hash === '#/home' && txt('#page-title') === '總覽', w.location.hash + ' ' + txt('#page-title'));
     ok('身分回到健康管理員阿德', run('DB.currentUser') === 'u_admin', run('DB.currentUser'));
     ok('操作紀錄清除、資料回到初始狀態', state() === initial, state() + ' vs ' + initial);
     ok('大字模式一併還原', !d.documentElement.classList.contains('big'));
@@ -398,24 +403,29 @@ const S = {
     ok('非健康管理員看不到開關，也看不到別人的郵件', !d.querySelector('#view [data-change=emailNotify]') && !view().includes('職安劉專員'), view().slice(0, 600));
   },
   async '17 待辦摘要與橫幅'() {
-    w.localStorage.removeItem('health-proto-banner-hidden');
     await as('u_pharm'); await go('home');
     ok('藥師看到待審商品', txt('#view .todo').includes('等你審核的商品'), txt('#view .todo'));
     ok('待辦不列沒有權限的頁面', !txt('#view .todo').includes('警示'), txt('#view .todo'));
     await snap('s17-pro');
     await as('u_sub3'); await go('home');
     ok('未同意的受測者看到同意待辦', txt('#view .todo').includes('尚未同意量測'), txt('#view .todo'));
+    ok('受測者預設顯示插畫', !!d.querySelector('#view .home-banner'));
     await click('#view [data-act=toggleBanner]');
     ok('可收合插畫', !d.querySelector('#view .home-banner'));
     await go('consent'); await go('home');
     ok('收合狀態會保留', !d.querySelector('#view .home-banner'));
+    await as('u_admin'); await go('home');
+    ok('內部人員預設收合插畫', !d.querySelector('#view .home-banner'));
     await click('#view [data-act=toggleBanner]');
     ok('可再展開', !!d.querySelector('#view .home-banner'));
+    await as('u_sub3'); await go('home');
+    ok('內部與受測者的收合設定分開記', !d.querySelector('#view .home-banner'));
   },
   async '18 展示引導'() {
     await as('u_admin'); await go('home');
     ok('每個展示情境都有引導步驟，且身分有權開啟該頁', run('DEMOS.every(x => GUIDE_STEPS[x.title]?.every(([, u, p]) => canOpen(p, DB.users.find(y => y.id === u))))'));
-    await click('#view [data-act=goAs][data-user="u_care"][data-to="alerts"]', '警示與處置');
+    await openDrawer();
+    await click('#demoDrawer [data-act=goAs][data-user="u_care"][data-to="alerts"]', '警示與處置');
     const g = () => txt('#guide');
     ok('開始情境後顯示第 1 步', g().includes('警示與處置') && g().includes('1／3'), g());
     await click('#guide [data-act=guideNext]'); await click('#guide [data-act=guideNext]');
@@ -486,6 +496,418 @@ const S = {
     await as('u_sub2'); await go('recommend'); await click(`#view [data-act=revokeShare][data-id="${id}"]`, '撤回分享');
     await as('u_pharm'); await go('pharmacy');
     ok('撤回後藥師看不到', view().includes('本人已撤回') && run(`!sharedRecord(DB.consults.find(c => c.id === '${id}'))`), view().slice(0, 500));
+  },
+  async '22 功能權限總覽'() {
+    await as('u_admin'); await go('permissions');
+    ok('列出模組中的所有功能', d.querySelectorAll('#view .perm-table tbody tr:not(.perm-group)').length === run('MODULES.flatMap(m => m.sections.flatMap(s => Object.keys(s.pages))).length'));
+    ok('勾選結果與各頁實際權限一致', run(`(() => { const keys = Object.keys(ROLE_NAMES); return [...document.querySelectorAll('#view .perm-table tbody tr:not(.perm-group)')].every(tr => { const p = tr.querySelector('a').hash.slice(2); return [...tr.querySelectorAll('td.perm-cell')].every((td, i) => !!td.querySelector('.perm-yes') === ROUTES[p].roles.includes(keys[i])); }); })()`));
+    ok('每個功能都有頁面內限制說明', run('permissionRows().every(r => r.note)'), run("permissionRows().filter(r => !r.note).map(r => r.path).join()"));
+    await snap('s22-permissions');
+    await set('#permRole', 'operator');
+    const n = run("permissionRows().filter(r => r.roles.includes('operator')).length");
+    ok('可只看單一角色', d.querySelectorAll('#view .perm-table tbody tr:not(.perm-group)').length === n && d.querySelectorAll('#view .perm-table thead th').length === 3, view().slice(0, 300));
+    await click('#view [data-act=exportPerm]');
+    ok('可匯出並記錄匯出紀錄', run("DB.exportLog[0].name") === '功能權限總覽' && run('DB.exportLog[0].rows === permissionRows().length'));
+    await as('u_sys'); await go('permissions');
+    ok('系統管理者可查看', !view().includes('沒有此功能權限'));
+    await as('u_sub1'); await go('permissions');
+    ok('一般使用者沒有權限', view().includes('沒有此功能權限') && !d.querySelector('#view .perm-table'), view());
+  },
+  async '23 客訴結案流程'() {
+    await as('u_sub1'); await go('adverse');
+    d.querySelector('#view [name=text]').value = '服用後腸胃不適（測試）';
+    await click('#view form[data-submit=saveAdverse] button');
+    const id = run('DB.adverse[0].id');
+    ok('新回報為待受理', run('DB.adverse[0].status') === '待受理' && view().includes('尚未結案'), view());
+    ok('回報人沒有處理按鈕', !d.querySelector('#view [data-act=adverseOpen], #view [data-act=recall]'));
+    run(`ACTIONS.adverseAccept({ dataset: { id: '${id}' } })`); await sleep(300);
+    ok('受測者呼叫受理會被拒絕', run('DB.adverse[0].status') === '待受理');
+    await as('u_merch'); await go('adverse');
+    await click(`#view [data-act=adverseOpen][data-id="${id}"]`, '處理');
+    ok('受理前不能填寫結案', !d.querySelector('#adverseForm'), modalText());
+    await snap('s23-accept');
+    await click('#modal [data-act=adverseAccept]', '受理');
+    ok('受理後為處理中並記下受理人', run('DB.adverse[0].status') === '處理中' && run('DB.adverse[0].handler') === 'u_merch');
+    await click(`#view [data-act=adverseOpen][data-id="${id}"]`, '處理');
+    d.querySelector('#adverseForm [name=close]').checked = true;
+    await click('#modal button[form=adverseForm]', '儲存');
+    ok('未填結果不能結案', run('DB.adverse[0].status') === '處理中' && lastToasts().includes('結案必須'), lastToasts());
+    d.querySelector('#adverseForm [name=note]').value = '內部備註僅供處理人員';
+    d.querySelector('#adverseForm [name=type]').value = '建議停用並就醫';
+    d.querySelector('#adverseForm [name=reply]').value = '請先停用並諮詢醫師';
+    await snap('s23-close');
+    await click('#modal button[form=adverseForm]', '儲存');
+    ok('填妥後結案', run('DB.adverse[0].status') === '已結案' && run('DB.adverse[0].result.type') === '建議停用並就醫');
+    ok('結案後沒有下架按鈕', !d.querySelector(`#view [data-act=recall][data-id="${id}"]`));
+    await click(`#view [data-act=adverseOpen][data-id="${id}"]`, '查看');
+    ok('結案後只能查看', !d.querySelector('#adverseForm') && modalText().includes('處理歷程'), modalText());
+    await closeM();
+    run(`ACTIONS.adverseAccept({ dataset: { id: '${id}' } })`); await sleep(300);
+    ok('已結案不能重新受理', run('DB.adverse[0].status') === '已結案');
+    await click('#view [data-act=recall][data-id="D001"]', '下架並通知');
+    ok('下架不等於結案', run("DB.adverse.find(a => a.id === 'D001').status") === '處理中');
+    await snap('s23-list');
+    await as('u_sub1'); await go('adverse');
+    ok('回報人看得到結案結果', view().includes('請先停用並諮詢醫師'), view());
+    ok('回報人看不到內部紀錄', !view().includes('內部備註僅供處理人員'), view());
+  },
+  async '24 流程總覽'() {
+    await as('u_admin'); await go('flows');
+    const tabs = () => [...d.querySelectorAll('#modtabs .modtab')].map(a => a.textContent.trim()).join();
+    ok('流程管理頁籤排在總覽右邊', tabs().startsWith('總覽,流程管理,'), tabs());
+    ok('頁籤直接開啟流程總覽並標示為目前位置', d.querySelector('#modtabs .modtab.active')?.getAttribute('href') === '#/flows', tabs());
+    if (W >= 992) { const nav = d.querySelector('#modtabs'); ok('模組頁籤沒有被切掉', nav.scrollWidth <= nav.clientWidth, nav.scrollWidth + ' > ' + nav.clientWidth); }
+    ok('系統設定不再列流程總覽', !run("moduleById('admin').sections.some(s => 'flows' in s.pages)"));
+    ok('列出各流程', run('FLOWS.length') === 8 && d.querySelectorAll('#view .flow-steps').length === 8);
+    const sums = 'FLOWS.filter(f => f.total).map(f => [f.title, [...f.steps, ...(f.others || [])].reduce((n, s) => n + s.count(), 0), f.total()])';
+    ok('各流程件數合計等於資料筆數', run(`${sums}.every(x => x[1] === x[2])`), run(`JSON.stringify(${sums})`));
+    ok('待處理清單與流程件數一致', d.querySelectorAll('#view .flow-pending tbody tr').length === run('pendingFlowSteps().length'));
+    ok('開不了的功能沒有連結', !d.querySelector('#view a[href="#/products"]') && !!d.querySelector('#view a[href="#/alerts"]'));
+    ok('不顯示個案內容', !view().includes('外盒壓傷'));
+    await snap('s24-flows');
+    const waiting = "FLOWS.find(f => f.page === 'adverse').steps[0].count()";
+    const before = run(waiting);
+    await as('u_merch'); await go('adverse');
+    await click('#view [data-act=adverseOpen][data-id="D001"]', '處理');
+    await click('#modal [data-act=adverseAccept]', '受理');
+    await go('flows');
+    ok('件數隨案件狀態更新', run(waiting) === before - 1);
+    ok('商品人員可從流程前往商品審核', !!d.querySelector('#view a[href="#/products"]'));
+    await as('u_sub1'); await go('flows');
+    ok('一般使用者沒有權限', view().includes('沒有此功能權限') && !d.querySelector('#view .flow-steps'), view());
+  },
+  async '25 諮詢追問與結案'() {
+    const c = "DB.consults.find(x => x.id === 'Q001')";
+    const send = async (act, name, value) => {
+      const form = `#view form[data-submit=${act}][data-id="Q001"]`;
+      if (!d.querySelector(form)) { ok('找得到表單 ' + act, false, view().slice(0, 300)); return; }
+      d.querySelector(`${form} [name=${name}]`).value = value; await click(`${form} button`, act);
+    };
+    const call = async code => { toasts = []; run(code); await sleep(300); };
+    await as('u_sub2'); await go('recommend');
+    ok('回覆前不能追問', !d.querySelector('#view [data-submit=followUp][data-id="Q001"]'));
+    await as('u_pharm'); await go('consult');
+    ok('回覆前藥師不能結案', !d.querySelector('#view [data-submit=closeConsult]'));
+    await send('replyConsult', 'reply', '第一次回覆（測試）');
+    ok('回覆後為已回覆', run(`${c}.status`) === '已回覆' && run(`${c}.thread.length`) === 1, view().slice(0, 400));
+    ok('已回覆時只能結案不能再回覆', !d.querySelector('#view [data-submit=replyConsult][data-id="Q001"]') && !!d.querySelector('#view [data-submit=closeConsult][data-id="Q001"]'));
+    await as('u_nutri'); await go('consult');
+    ok('資格到期者不能回覆或結案', view().includes('資格已到期') && !d.querySelector('#view [data-submit=closeConsult], #view [data-submit=replyConsult]'), view().slice(0, 300));
+    await as('u_sub2'); await go('recommend');
+    await send('followUp', 'text', '追問內容（測試）');
+    ok('追問後回到待回覆', run(`${c}.status`) === '待回覆' && view().includes('追問內容（測試）'), view().slice(-500));
+    await snap('s25-subject');
+    await as('u_pharm'); await go('pharmacy');
+    ok('藥師看得到追問，分享仍有效', view().includes('追問內容（測試）') && run(`!!sharedRecord(${c})`), view().slice(0, 500));
+    await send('replyConsult', 'reply', '第二次回覆（測試）');
+    await send('closeConsult', 'reason', '問題已說明（測試）');
+    ok('藥師結案並記錄原因', run(`${c}.status`) === '已結案' && run(`${c}.closed.reason`) === '問題已說明（測試）');
+    ok('結案後藥師看不到分享的量測', run(`!sharedRecord(${c})`) && view().includes('已結案，停止分享') && !/收縮壓 \d/.test(view()), view().slice(0, 600));
+    await snap('s25-pharmacy');
+    await as('u_sub2'); await go('recommend');
+    ok('結案後本人沒有追問或撤回按鈕', !d.querySelector('#view [data-id="Q001"]') && view().includes('問題已說明（測試）'), view().slice(-500));
+    await call("ACTIONS.closeOwnConsult({ dataset: { id: 'Q001' } })");
+    ok('已結案不能再結案', lastToasts().includes('已結案') && run(`${c}.closed.reason`) === '問題已說明（測試）', lastToasts());
+    d.querySelector('#view [name=q]').value = '第二個問題（測試）';
+    await click('#view form[data-submit=askConsult] button', '送出諮詢');
+    const id = run('DB.consults[0].id');
+    await as('u_sub1');
+    await call(`ACTIONS.closeOwnConsult({ dataset: { id: '${id}' } })`);
+    ok('不能結案別人的諮詢', run('DB.consults[0].status') === '待回覆' && lastToasts().includes('自己的'), lastToasts());
+    await as('u_sub2'); await go('recommend');
+    await click(`#view [data-act=closeOwnConsult][data-id="${id}"]`, '本人結案');
+    ok('本人可在回覆前結案', run('DB.consults[0].status') === '已結案' && run('DB.consults[0].closed.by') === '本人');
+    await as('u_admin'); await go('flows');
+    ok('流程總覽件數正確', run("FLOWS.find(f => f.page === 'consult').steps.map(s => s.count()).join()") === '0,0,2', run("FLOWS.find(f => f.page === 'consult').steps.map(s => s.count()).join()"));
+  },
+  async '26 諮詢紅旗分流'() {
+    const ask = async text => { d.querySelector('#view [name=q]').value = text; await click('#view form[data-submit=askConsult] button', '送出諮詢'); };
+    const count = () => run('DB.consults.length');
+    await as('u_sub2'); await go('recommend');
+    const n = count();
+    await ask('我現在胸痛又喘不過氣（測試）');
+    ok('含緊急關鍵字時先不送出並顯示 119', count() === n && modalText().includes('119') && modalText().includes('尚未送出'), modalText());
+    await snap('s26-redflag');
+    await closeM();
+    ok('先不送出：沒有建立諮詢，內容仍在欄位', count() === n && d.querySelector('#view [name=q]').value.includes('胸痛'));
+    ok('紅旗紀錄記為未送出', run('DB.redFlagLog.length') === 1 && run('DB.redFlagLog[0].sent') === false);
+    await ask('家人中風過，飲食要注意什麼（測試）');
+    d.querySelector('#view [name=q]').value = '';
+    await click('#modal [data-act=sendFlagged]', '仍要送出');
+    ok('確認後送出並標記', count() === n + 1 && run('DB.consults[0].flags.join()') === '中風' && run('DB.redFlagLog[0].sent') === true && view().includes('含緊急關鍵字'));
+    const id = run('DB.consults[0].id');
+    toasts = []; run('ACTIONS.sendFlagged()'); await sleep(300);
+    ok('同一內容不會重複送出', count() === n + 1);
+    await ask('一般飲食問題（測試）');
+    ok('一般問題直接送出，不標記', count() === n + 2 && !modalOpen() && run('DB.consults[0].flags.length') === 0);
+    await as('u_pharm'); await go('home');
+    ok('藥師待辦列出含緊急關鍵字的諮詢', view().includes('含緊急關鍵字的待回覆諮詢'), view().slice(0, 500));
+    await go('consult');
+    const firstRow = () => (d.querySelector('#view .case-table tbody tr')?.innerText || '');
+    ok('藥師端把含緊急關鍵字的案件排最前面', firstRow().includes('家人中風過') && firstRow().includes('含緊急關鍵字'), firstRow());
+    await snap('s26-pro');
+    await go('pharmacy');
+    ok('社區藥局頁同樣排最前面', firstRow().includes('家人中風過'), firstRow());
+    d.querySelector(`#view form[data-submit=replyConsult][data-id="${id}"] [name=reply]`).value = '回覆（測試）';
+    await click(`#view form[data-submit=replyConsult][data-id="${id}"] button`, '回覆');
+    await as('u_sub2'); await go('recommend');
+    const followUp = async text => { const f = `#view form[data-submit=followUp][data-id="${id}"]`; d.querySelector(f + ' [name=text]').value = text; await click(f + ' button', '追問'); };
+    await followUp('剛剛突然呼吸困難（測試）');
+    ok('追問含緊急關鍵字時先不送出', run(`DB.consults.find(c => c.id === '${id}').status`) === '已回覆' && modalText().includes('119'), modalText());
+    await click('#modal [data-act=sendFlagged]', '仍要送出');
+    ok('確認後追問送出並標記', run(`DB.consults.find(c => c.id === '${id}').status`) === '待回覆' && run(`DB.consults.find(c => c.id === '${id}').thread.at(-1).flags.join()`) === '呼吸困難');
+    await as('u_sys'); await go('audit');
+    ok('稽核看得到提示紀錄但沒有內容', view().includes('諮詢紅旗提示紀錄') && view().includes('未送出') && view().includes('諮詢追問') && !view().includes('呼吸困難') && !view().includes('中風'), view().slice(0, 600));
+  },
+  async '27 首頁、展示工具與待辦卡片'() {
+    // 待辦卡片不得出現姓名、對象編號、指標名稱或健康狀況；先造出一件含緊急關鍵字的諮詢與一件警示
+    run("DB.consults[0].flags = ['胸痛']");
+    const banned = JSON.parse(run('JSON.stringify([...DB.subjects.flatMap(s => [s.name, s.id]), ...DB.users.filter(u => u.role === "subject").map(u => u.name), ...DB.metrics.map(m => m.name), ...RED_FLAGS, "血壓", "血氧", "偏高", DB.consults[0].q])'));
+    const leaks = [];
+    for (const uid of JSON.parse(run('JSON.stringify(DB.users.map(u => u.id))'))) {
+      await as(uid); await go('home');
+      const t = txt('#view .todo');
+      banned.filter(x => t.includes(x)).forEach(x => leaks.push(uid + ':' + x));
+    }
+    ok('所有身分的待辦卡片都不含姓名、編號與健康狀況', !leaks.length, leaks.join());
+    await as('u_admin'); await go('home');
+    const card = d.querySelector('#view .todo a[href="#/alerts"]');
+    ok('警示卡片顯示件數、狀態與最早時間，並以紅色標示', card && card.classList.contains('urgent') && /待處理 1/.test(card.innerText) && /最早一件/.test(card.innerText), card?.innerText);
+    ok('一般待辦不用紅色', !d.querySelector('#view .todo a[href="#/daycare"]').classList.contains('urgent'));
+    ok('紅色項目排在最前面', d.querySelector('#view .todo li a').classList.contains('urgent'));
+    await as('u_pharm'); await go('home');
+    ok('藥師看到含緊急關鍵字的優先卡片', [...d.querySelectorAll('#view .todo a.urgent')].some(a => a.innerText.includes('含緊急關鍵字') && a.innerText.includes('優先')), txt('#view .todo'));
+    ok('緊急關鍵字諮詢排在複審逾期前面', d.querySelector('#view .todo li a .todo-label').innerText.includes('含緊急關鍵字'), txt('#view .todo'));
+    await snap('s27-todo');
+    await as('u_admin'); await go('home');
+    ok('首頁沒有展示情境與雛型說明', !d.querySelector('#view .demo-list, #view .proto-note, #view [data-act=goAs]'));
+    await go('m-health');
+    ok('模組首頁沒有展示情境', !d.querySelector('#view .demo-list'));
+    await go('home');
+    const rows = JSON.parse(run(`JSON.stringify([...document.querySelectorAll('#view .dir-card a[href]:not(.dir-plate)')].map(a => a.getAttribute('href')))`));
+    ok('模組卡片列出此身分可開啟的全部功能', rows.length === run('MODULES.flatMap(m => sectionsFor(m).flatMap(s => s.pages)).length'), rows.length);
+    ok('場景應用的社區藥局直接可見', rows.includes('#/pharmacy'));
+    const tag = d.querySelector('.topbar .proto-tag'), box = tag.getBoundingClientRect();
+    ok('虛構資料提示看得到', w.getComputedStyle(tag).display !== 'none' && box.width > 0 && box.right <= d.documentElement.clientWidth, JSON.stringify(box));
+    const btnBox = d.querySelector('.demo-btn').getBoundingClientRect();
+    ok('展示工具按鈕在畫面內', btnBox.width > 0 && btnBox.right <= d.documentElement.clientWidth + 1, JSON.stringify(btnBox));
+    ok('目前身分完整顯示', (() => { const e = d.querySelector('#who'); return e.innerText.includes('健康管理員') && e.scrollWidth <= e.parentElement.clientWidth + 1; })(), txt('#who'));
+    if (W >= 992) { const nav = d.querySelector('#modtabs'); ok('模組頁籤沒有被切掉', nav.scrollWidth <= nav.clientWidth, nav.scrollWidth + ' > ' + nav.clientWidth); }
+    await snap('s27-home');
+    await openDrawer();
+    ok('展示工具抽屜含身分、重置、全部情境與雛型說明', drawerOpen() && !!d.querySelector('#demoDrawer #persona') && !!d.querySelector('#demoDrawer [data-act=reset]') && d.querySelectorAll('#demoDrawer [data-act=goAs]').length === run('DEMOS.length') && txt('#demoDrawer').includes('需求確認用的雛型'));
+    await snap('s27-drawer');
+    await as('u_care');
+    ok('在抽屜切換身分後自動關閉', !drawerOpen() && run('DB.currentUser') === 'u_care');
+    await openDrawer();
+    await click('#demoDrawer [data-act=reset]'); await sleep(400);
+    ok('按重置時抽屜關閉並跳出確認', !drawerOpen() && modalText().includes('重置示範資料'), modalText());
+    await closeM();
+    await as('u_op'); await go('kiosk');
+    ok('機台模式也看得到虛構資料提示', view().includes('虛構資料'), view());
+  },
+  async '28 流程總覽的待處理篩選與版面'() {
+    // 造出各種停留狀態
+    run(`(() => {
+      const live = DB.products.filter(p => p.status === '已發布' && !p.offline);
+      live[0].status = '已核准'; live[1].status = '已退回';
+      DB.rules[0].status = '已退回';
+      DB.kbDocs.find(d => d.id === 'K01').status = '已退回';
+      DB.orders.push({ id: 'OT1', buyer: 'u_sub1', time: DB.today + ' 09:00', items: [], total: 0, status: '待付款', paid: false, invoice: '' }, { id: 'OT2', buyer: 'u_sub1', time: DB.today + ' 09:10', items: [], total: 0, status: '已付款・待出貨', paid: true, invoice: '' });
+    })()`);
+    // 各身分現在能操作的步驟，依各頁操作的檢查條件人工列出
+    const expected = {
+      u_admin: ['警示處置:待處理'],
+      u_sys: [],
+      u_merch: ['商品審核:已核准', '商品審核:已退回', '推薦規則審核:已退回', '自建購物訂單:已付款・待出貨', '不良反應與客訴:待受理'],
+      u_pharm: ['商品審核:待專業審核', '不良反應與客訴:待受理', '專業諮詢:待回覆'],
+      u_nutri: ['不良反應與客訴:待受理'],
+      u_legal1: ['商品審核:已核准', '知識文件審核:已退回', '不良反應與客訴:待受理'],
+      u_legal2: ['商品審核:已核准', '知識文件審核:待法遵審核', '知識文件審核:已退回', '不良反應與客訴:待受理']
+    };
+    const rows = () => d.querySelectorAll('#view .flow-pending tbody tr').length;
+    const doRows = () => d.querySelectorAll('#view .flow-pending .flow-do').length;
+    for (const [uid, want] of Object.entries(expected)) {
+      await as(uid); await go('flows');
+      const got = JSON.parse(run('JSON.stringify(pendingFlowSteps().filter(x => x.step.mine()).map(x => x.flow.title + ":" + x.step.name))'));
+      ok(`${uid} 可處理的步驟正確`, got.slice().sort().join() === want.slice().sort().join(), got.join());
+      const manager = ['u_admin', 'u_sys'].includes(uid), box = d.querySelector('#flowMine');
+      ok(`${uid} 預設${manager ? '看全部' : '只看我要處理的'}`, box.checked === !manager && rows() === (manager ? run('pendingFlowSteps().length') : want.length), `checked=${box.checked} rows=${rows()}`);
+      ok(`${uid} 只有能處理的列顯示「處理」`, doRows() === want.length, doRows() + ' vs ' + want.length);
+    }
+    await as('u_admin'); await go('flows');
+    const kbRow = [...d.querySelectorAll('#view .flow-pending tbody tr')].find(tr => tr.innerText.includes('知識文件審核'));
+    ok('能開啟但不能處理時只顯示「查看」', kbRow && kbRow.querySelector('.flow-see') && !kbRow.querySelector('.flow-do'), kbRow?.innerText);
+    ok('打不開的列顯示鎖頭', !!d.querySelector('#view .flow-pending .flow-locked .bi-lock'));
+    await click('#flowMine', '只看我要處理的');
+    ok('切換後只剩自己能處理的', rows() === 1 && view().includes('我要處理的案件'), rows());
+    await as('u_sys'); await go('flows'); await click('#flowMine', '只看我要處理的');
+    ok('沒有可處理案件時顯示說明', view().includes('目前沒有你要處理的案件'), view().slice(0, 300));
+    await click('#view [data-act=flowShowAll]', '查看全部');
+    ok('可一鍵查看全部', rows() === run('pendingFlowSteps().length') && !d.querySelector('#flowMine').checked);
+    // 標示「處理」的案件，目標頁真的有可操作的按鈕或表單
+    await as('u_legal2'); await go('kb');
+    ok('法遵乙在知識文件頁可以核准待審文件', !!d.querySelector('#view [data-act=kbApprove][data-id=K06]'));
+    toasts = []; run("ACTIONS.kbApprove({ dataset: { id: 'K06' } })"); await sleep(300);
+    ok('核准實際成功', run("DB.kbDocs.find(d => d.id === 'K06').status") === '已核准', lastToasts());
+    await as('u_pharm'); await go('consult');
+    ok('藥師在諮詢頁可以回覆', !!d.querySelector('#view [data-submit=replyConsult]'));
+    await as('u_merch'); await go('orders');
+    ok('商品人員在訂單頁可以出貨', !!d.querySelector('#view [data-act=orderStep][data-to="已出貨"]'));
+    await as('u_admin'); await go('flows');
+    const stuck = [...d.querySelectorAll('#view .flow-branches .flow-step.has-wait')];
+    ok('停在分支狀態的案件有節點標示', stuck.length >= 2 && stuck.every(e => e.innerText.includes('有案件停留')), stuck.map(e => e.innerText).join(' / '));
+    ok('所有停留節點都有文字旗標', [...d.querySelectorAll('#view .flow-step.has-wait')].every(e => e.querySelector('.flow-flag')));
+    const hue = JSON.parse(run("JSON.stringify([...document.querySelectorAll('#view .flow-step.has-wait, #view .flow-flag')].map(e => getComputedStyle(e).backgroundColor))"));
+    ok('停留標示不用黃色或橘色', hue.every(c => { const cv = d.createElement('canvas').getContext('2d'); cv.fillStyle = c; cv.fillRect(0, 0, 1, 1); const [r, g, b] = cv.getImageData(0, 0, 1, 1).data; return !(r > b + 25 && g > b + 10); }), hue.join());
+    ok('頂部說明預設收合，圖例常駐', !d.querySelector('#view .flow-help').open && txt('#view .flow-legend').includes('有案件停留') && txt('#view .flow-legend').includes('不含個案內容'));
+    const notes = () => [...d.querySelectorAll('#view details.flow-note')];
+    ok('規則說明預設收合', notes().length === 8 && notes().every(e => !e.open));
+    w.dispatchEvent(new w.Event('beforeprint'));
+    ok('列印前自動展開', notes().every(e => e.open) && d.querySelector('#view .flow-help').open);
+    w.dispatchEvent(new w.Event('afterprint'));
+    ok('列印後還原收合', notes().every(e => !e.open) && !d.querySelector('#view .flow-help').open);
+    const cardOf = title => [...d.querySelectorAll('#view .flow-card')].find(e => e.querySelector('.card-header strong').innerText.startsWith(title));
+    const box = t => cardOf(t).getBoundingClientRect();
+    if (W >= 1200) {
+      if (W >= 1280) ok('分支節點放在主流程右側', [...d.querySelectorAll('#view .flow-side')].every(e => { const m = e.parentElement.querySelector('.flow-steps').getBoundingClientRect(), s = e.getBoundingClientRect(); return Math.abs(m.top - s.top) < 2 && s.left >= m.right - 1; }));
+      ok('三步以下的流程兩兩並排', Math.abs(box('知識文件').top - box('自建購物').top) < 2 && Math.abs(box('不良反應').top - box('專業諮詢').top) < 2);
+      ok('四步以上的流程占整列', box('商品審核').width > box('知識文件').width * 1.8);
+      const tops = t => new Set([...cardOf(t).querySelectorAll('.flow-steps > li')].map(e => Math.round(e.getBoundingClientRect().top))).size;
+      ok('主流程步驟沒有換行', ['量測', '警示處置', '商品審核', '推薦規則', '知識文件', '自建購物', '不良反應', '專業諮詢'].every(t => tops(t) === 1), ['量測', '警示處置', '商品審核', '推薦規則', '知識文件', '自建購物', '不良反應', '專業諮詢'].map(t => t + tops(t)).join());
+    } else {
+      ok('窄螢幕維持單欄', Math.abs(box('知識文件').top - box('自建購物').top) > 20);
+    }
+    ok('卡片內容沒有超出卡片', [...d.querySelectorAll('#view .flow-card .card-body')].every(e => e.scrollWidth - e.clientWidth <= 1));
+    await snap('s28-flows');
+    await as('u_merch'); await go('flows');
+    await snap('s28-merch');
+  },
+  async '29 各頁說明收納與清單排序'() {
+    // 各頁說明收合，常駐一句重點
+    const noted = [['u_admin', 'metrics'], ['u_admin', 'thresholds'], ['u_admin', 'reference'], ['u_admin', 'permissions'], ['u_ohs', 'assistant'], ['u_sub1', 'eduqa'], ['u_legal1', 'reviewassist'], ['u_legal1', 'kb'], ['u_ohs', 'worksite'], ['u_day', 'daycare'], ['u_merch', 'products'], ['u_merch', 'rules'], ['u_pharm', 'pharmacy'], ['u_merch', 'adverse'], ['u_sub1', 'shop'], ['u_merch', 'orders']];
+    const bad = [];
+    for (const [uid, page] of noted) {
+      await as(uid); await go(page);
+      const note = d.querySelector('#view .page-note');
+      if (!note || note.querySelector('details').open || note.querySelector('span').innerText.trim().length < 8) bad.push(page);
+      audit('s29-' + page);
+    }
+    ok('16 頁的說明都收合，且常駐一句重點', !bad.length, bad.join());
+    await as('u_ohs'); await go('worksite');
+    ok('安全使用限制仍常駐顯示', txt('#view .page-note').includes('不用於停工') && txt('#view .page-note').includes('考核'), txt('#view .page-note'));
+    w.dispatchEvent(new w.Event('beforeprint'));
+    ok('列印前自動展開說明', d.querySelector('#view details.page-help').open);
+    w.dispatchEvent(new w.Event('afterprint'));
+    ok('列印後還原', !d.querySelector('#view details.page-help').open);
+    await as('u_care'); await go('alerts');
+    ok('119 提示沒有被收起', view().includes('119') && !d.querySelector('#view details .alert-danger'));
+    await as('u_sub1'); await go('eduqa');
+    ok('衛教問答的緊急提示沒有被收起', view().includes('119'));
+    await as('u_nutri'); await go('pharmacy');
+    ok('資格到期警告沒有被收起', view().includes('資格已到期') && !d.querySelector('#view details .alert-danger'));
+
+    // 清單頁：預設看全部、我的排前面
+    run(`(() => {
+      const live = DB.products.filter(p => p.status === '已發布' && !p.offline);
+      live[live.length - 1].status = '已退回';
+      DB.rules[DB.rules.length - 1].status = '已退回';
+      DB.kbDocs[DB.kbDocs.length - 1].status = '已退回';
+      DB.orders.push({ id: 'OT9', buyer: 'u_sub1', time: DB.today + ' 09:00', items: [], total: 0, status: '已出貨', paid: true, invoice: '' }, { id: 'OT8', buyer: 'u_sub1', time: DB.today + ' 09:10', items: [], total: 0, status: '已付款・待出貨', paid: true, invoice: '' });
+      DB.adverse.push({ id: 'DT9', time: DB.today + ' 09:20', by: 'u_sub1', product: 'P002', kind: '客訴', text: '已結案測試', status: '已結案', handler: 'u_merch', action: '', result: { type: '其他', note: '測試', time: DB.today + ' 09:30' }, history: [] });
+      DB.adverse.reverse();
+    })()`);
+    const queues = [
+      ['u_merch', 'products', 'DB.products', 'WORK.review'], ['u_sys', 'products', 'DB.products', 'WORK.review'],
+      ['u_merch', 'rules', 'DB.rules', 'WORK.review'], ['u_legal2', 'kb', 'DB.kbDocs', 'WORK.kb'], ['u_admin', 'kb', 'DB.kbDocs', 'WORK.kb'],
+      ['u_merch', 'orders', 'DB.orders', 'WORK.order'], ['u_merch', 'adverse', 'DB.adverse', 'WORK.adverse'],
+      ['u_pharm', 'consult', 'DB.consults', 'WORK.consult'], ['u_pharm', 'pharmacy', 'DB.consults', 'WORK.consult'], ['u_nutri', 'consult', 'DB.consults', 'WORK.consult'],
+      ['u_admin', 'alerts', 'DB.alerts', 'WORK.alert']
+    ];
+    for (const [uid, page, data, rule] of queues) {
+      await as(uid); await go(page);
+      // 每一列（規則頁是每一張卡片）是否帶「待我處理」標籤，依畫面順序
+      const marks = () => page === 'rules' ? [...d.querySelectorAll('#view .card')].map(e => !!e.querySelector('.card-header .mine-tag'))
+        : [...d.querySelector('#view .table tbody').rows].map(r => !!r.querySelector('.mine-tag'));
+      const total = run(data + '.length'), mine = run(`${data}.filter(${rule}).length`), first = marks();
+      const tag = `${uid} ${page}`;
+      ok(`${tag} 預設顯示全部`, first.length === total, first.length + '/' + total);
+      ok(`${tag} 標籤與按鈕沒有被擠壓`, [...d.querySelectorAll('#view .mine-tag')].every(e => e.scrollWidth <= e.clientWidth + 1 && parseFloat(w.getComputedStyle(e).paddingLeft) >= 6) && [...d.querySelectorAll('#view .table td > .btn')].every(b => b.getBoundingClientRect().height < 56), tag);
+      ok(`${tag} 標籤數與可處理件數一致且排最前面`, first.filter(Boolean).length === mine && first.slice(0, mine).every(Boolean), `mine=${mine} ${first.join()}`);
+      const sw = d.querySelector('#view [data-key=mine_' + page + ']');
+      ok(`${tag} 有可處理項目才有開關，預設關閉`, mine ? sw && !sw.checked : !sw, `mine=${mine}`);
+      if (sw) {
+        await click(sw, tag + ' 只看我要處理的');
+        const only = marks();
+        ok(`${tag} 打開後只剩我的`, only.length === mine && only.every(Boolean), only.join());
+        await click('#view [data-key=mine_' + page + ']', tag + ' 關閉篩選');
+        ok(`${tag} 關閉後回到全部`, marks().length === total);
+      }
+    }
+
+    await as('u_merch'); await go('products');
+    await click('#view [data-act=newProduct]', '新增商品'); await closeM(); await go('products');
+    ok('新增的草稿預設看得到', view().includes('新商品'));
+    await as('u_care'); await go('alerts');
+    run("DB.alerts[0].status = '待複測'; App.render()"); await sleep(200);
+    ok('待複測警示預設看得到，且按鈕為「查看」', view().includes('待複測') && d.querySelector('#view [data-act=openAlertDetail]').innerText.trim() === '查看', view().slice(0, 300));
+    run("DB.alerts[0].status = '待處理'; App.render()"); await sleep(200);
+    ok('能處理的警示按鈕為「處理」', d.querySelector('#view [data-act=openAlertDetail]').innerText.includes('處理'));
+    const act = d.querySelector('#view [data-act=openAlertDetail]').getBoundingClientRect();
+    ok('警示的處理按鈕不必捲動就看得到', act.width > 0 && act.right <= d.documentElement.clientWidth + 1 && act.left >= 0, JSON.stringify(act));
+    await snap('s29-alerts');
+
+    // 流程總覽與清單頁用同一份判斷
+    for (const uid of ['u_merch', 'u_pharm', 'u_legal2']) {
+      await as(uid); await go('flows');
+      const fromFlows = run(`pendingFlowSteps().filter(x => x.flow.page === 'adverse').reduce((n, x) => n + x.step.mine(), 0)`);
+      ok(`${uid} 流程總覽與客訴清單件數一致`, fromFlows === run('DB.adverse.filter(WORK.adverse).length'), fromFlows);
+    }
+    await as('u_merch'); await go('products');
+    await snap('s29-products');
+    await as('u_legal2'); await go('kb');
+    await snap('s29-kb');
+    await as('u_merch'); await go('rules');
+    await snap('s29-rules');
+  },
+  async '30 模組首頁版面與待我處理件數'() {
+    await as('u_admin'); await go('m-health');
+    const row = href => d.querySelector(`#view a[href="#/${href}"]`);
+    const bottom = row('alerts').getBoundingClientRect().bottom + w.scrollY;
+    // 驗收標準：1366×768 螢幕的可視區（高 675px）內，「警示與處置」整列完整露出
+    if (W >= 1366) ok('「警示與處置」整列在 675px 內', bottom <= 675, Math.round(bottom));
+    const cards = [...d.querySelectorAll('#view .page-cards a')].map(e => e.getBoundingClientRect());
+    ok('場景卡片圖示在左、文字在右', [...d.querySelectorAll('#view .page-cards a')].every(a => a.querySelector('.page-text').getBoundingClientRect().left >= a.querySelector('.page-icon').getBoundingClientRect().right));
+    ok('卡片高度比原本明顯降低', Math.max(...cards.map(c => c.height)) <= (W >= 1200 ? 105 : 120), cards.map(c => Math.round(c.height)).join());
+    if (W < 576) ok('手機上場景卡片區不超過 200px 高', Math.max(...cards.map(c => c.bottom)) - Math.min(...cards.map(c => c.top)) <= 200, Math.round(Math.max(...cards.map(c => c.bottom)) - Math.min(...cards.map(c => c.top))));
+    ok('列表名稱與說明上下排列', [...d.querySelectorAll('#view .page-list a')].every(a => a.querySelector('.page-desc').getBoundingClientRect().top >= a.querySelector('.page-name').getBoundingClientRect().bottom - 1));
+    ok('模組說明移到頁首，內容區不再重複', !d.querySelector('#view .lead-line') && txt('#page-tags').includes('同意、量測'), txt('#page-tags'));
+    ok('場景應用 5 張卡片仍在最上面', cards.length === 5 && d.querySelector('#view .block-title').innerText === '場景應用');
+    ok('警示列顯示待我處理件數', row('alerts').querySelector('.mine-tag')?.innerText.includes('待我處理 ' + run("queueCount('alerts')")), row('alerts').innerText);
+    ok('同意與量測不放任何人數', ['consent', 'measure', 'list'].every(h => !row(h).querySelector('.mine-tag') && !/\d/.test(row(h).innerText)), ['consent', 'measure', 'list'].map(h => row(h).innerText).join(' / '));
+    await snap('s30-health');
+
+    // 每個身分、每個模組首頁的件數都和該清單頁實際可處理件數一致
+    const wrong = [];
+    for (const uid of JSON.parse(run('JSON.stringify(DB.users.map(u => u.id))'))) {
+      await as(uid);
+      for (const mod of ['health', 'shop', 'assist']) {
+        if (!run(`sectionsFor(moduleById('${mod}')).length`)) continue;
+        await go('m-' + mod);
+        for (const a of d.querySelectorAll('#view .page-list a, #view .page-cards a')) {
+          const path = a.getAttribute('href').slice(2), shown = +(a.querySelector('.mine-tag')?.innerText.match(/\d+/)?.[0] || 0);
+          if (shown !== run(`queueCount('${path}')`)) wrong.push(uid + ':' + path);
+        }
+      }
+    }
+    ok('所有身分的件數標籤正確', !wrong.length, wrong.join());
+    await as('u_pharm'); await go('pharmacy');
+    const onPage = d.querySelectorAll('#view .table .mine-tag').length;
+    ok('藥局件數與清單頁標籤數一致', onPage === run("queueCount('pharmacy')") && onPage > 0, onPage);
+    await go('m-shop');
+    await snap('s30-shop');
+    await as('u_admin'); await go('home');
+    ok('展示工具按鈕與虛構資料都是虛線框', ['.demo-btn', '.topbar .proto-tag'].every(sel => w.getComputedStyle(d.querySelector(sel)).borderTopStyle === 'dashed'));
   }
 };
 

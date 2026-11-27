@@ -35,7 +35,7 @@ const PAGE_NOTES = {
   devices: '至少保留一台啟用裝置',
   audit: '看得到查閱、匯出與紅旗提示紀錄（紅旗紀錄不含諮詢內容）',
   deploy: '修改量測服務網址限系統管理者',
-  flows: '唯讀；只有件數，不含個案內容。前往連結只給能開啟該功能的角色',
+  flows: '唯讀；只有件數，不含個案內容。能處理的案件顯示「處理」，只能開啟的顯示「查看」，打不開的顯示鎖頭',
   permissions: '唯讀'
 };
 
@@ -67,7 +67,7 @@ route('permissions', {
       const group = r.module === last ? '' : `<tr class="perm-group"><th colspan="${cols.length + 2}" scope="colgroup">${last = r.module}</th></tr>`;
       return `${group}<tr><th scope="row"><a href="#/${r.path}">${r.title}</a><small>${r.section}</small></th>${cols.map(c => `<td class="perm-cell">${mark(r.roles.includes(c))}</td>`).join('')}<td class="perm-note">${r.note || '—'}</td></tr>`;
     }).join('');
-    el.innerHTML = `<div class="alert alert-secondary py-2 small">雛型的權限由瀏覽器程式模擬，<strong>不代表安全保證</strong>；正式系統須在伺服器端檢查（依 EIIS 權限設定）。勾號只代表能開啟頁面，能執行哪些操作見「頁面內限制」。總覽與各模組首頁不另列。</div>
+    el.innerHTML = `${pageNote('雛型權限<strong>不代表安全保證</strong>；勾號只代表能開啟頁面。', '雛型的權限由瀏覽器程式模擬，<strong>不代表安全保證</strong>；正式系統須在伺服器端檢查（依 EIIS 權限設定）。勾號只代表能開啟頁面，能執行哪些操作見「頁面內限制」。總覽與各模組首頁不另列。')}
       ${card(`功能 × 角色（${shown.length} 項功能）`, `<div class="row g-2 mb-2 no-print"><div class="col-sm-6 col-md-4"><label class="form-label" for="permRole">只看某個角色</label><select class="form-select" id="permRole" data-change="setView" data-key="permRole">${opts([['', '全部角色'], ...roles.map(k => [k, ROLE_NAMES[k]])], only)}</select></div></div>
         <div class="table-responsive"><table class="table table-bordered align-middle mb-0 perm-table"><thead><tr><th scope="col">功能</th>${cols.map(c => `<th scope="col" class="perm-cell">${ROLE_NAMES[c].replaceAll('／', '／<wbr>')}</th>`).join('')}<th scope="col">頁面內限制</th></tr></thead><tbody>${body}</tbody></table></div>`,
         '<button class="btn btn-sm btn-outline-success no-print" data-act="exportPerm">匯出 CSV</button> <button class="btn btn-sm btn-outline-secondary no-print" data-act="printPage">列印／PDF</button>')}
