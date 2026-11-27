@@ -1,0 +1,503 @@
+<!DOCTYPE html><meta charset="utf-8"><body style="margin:0"><iframe id="f" style="border:0;height:900px"></iframe><pre id="out">RUNNING</pre>
+<script>
+// 展示情境測試：由 tests/run-tests.ps1 執行。測試會清除雛型的瀏覽器資料，所以只在帶 runner=1 時動作。
+const q = new URLSearchParams(location.search), f = document.getElementById('f');
+if (q.get('runner') !== '1') {
+  document.getElementById('out').textContent = '請用 tests/run-tests.ps1 執行。直接開啟本頁不會執行測試。';
+  throw new Error('not started by runner');
+}
+const W = +(q.get('w') || 1440), STOP = q.get('stop'), ONLY = q.get('only');
+f.style.width = W + 'px';
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const res = { w: W, checks: [], errors: [], contrast: {}, overflow: {} };
+let w, d, scen = '', toasts = [];
+const run = c => w.eval(c);
+const ok = (name, cond, detail = '') => res.checks.push({ s: scen, name, pass: !!cond, detail: cond ? '' : String(detail).slice(0, 260) });
+const txt = sel => (d.querySelector(sel)?.innerText || '').replace(/\s+/g, ' ');
+const view = () => txt('#view');
+const modalOpen = () => d.querySelector('#modal').classList.contains('show');
+const modalText = () => modalOpen() ? txt('#modal') : '';
+const lastToasts = () => toasts.join(' ｜ ');
+async function fresh() {
+  await new Promise(r => { f.onload = r; if (!f.src) f.src = q.get('app'); else { w.localStorage.clear(); w.location.hash = ''; w.location.reload(); } });
+  await sleep(300);
+  if (!fresh.cleared) { fresh.cleared = true; w = f.contentWindow; w.localStorage.clear(); await new Promise(r => { f.onload = r; w.location.reload(); }); await sleep(300); }
+  w = f.contentWindow; d = w.document; toasts = [];
+  w.addEventListener('error', e => res.errors.push(scen + ': ' + e.message));
+  const ce = w.console.error; w.console.error = (...a) => { res.errors.push(scen + ' console: ' + a.join(' ')); ce.apply(w.console, a); };
+  new w.MutationObserver(ms => ms.forEach(m => m.addedNodes.forEach(n => n.nodeType === 1 && toasts.push(n.innerText.trim() || n.textContent.trim())))).observe(d.querySelector('#toasts'), { childList: true });
+}
+async function as(uid) { const s = d.querySelector('#persona'); s.value = uid; s.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(600); }
+async function go(p) { if (w.location.hash === '#/' + p) run('App.render()'); else w.location.hash = '#/' + p; await sleep(600); }
+async function click(sel, label) {
+  const el = typeof sel === 'string' ? d.querySelector(sel) : sel;
+  if (!el) { ok(`找得到可點的元素：${label || sel}`, false, '畫面上沒有這個元素'); return false; }
+  toasts = []; el.click(); await sleep(700); return true;
+}
+const btn = (text, root = '#view') => [...d.querySelectorAll(root + ' button')].find(b => b.textContent.trim().includes(text));
+async function set(sel, value) {
+  const el = d.querySelector(sel);
+  if (!el) { ok('找得到欄位 ' + sel, false); return; }
+  el.value = value; toasts = []; el.dispatchEvent(new w.Event('change', { bubbles: true })); await sleep(500);
+}
+async function closeM() { if (modalOpen()) { d.querySelector('#modal .btn-close').click(); await sleep(700); } }
+async function measure(scenario) {
+  await closeM();
+  d.querySelector('[name=scenario]').value = scenario;
+  toasts = []; d.querySelector('#measureForm button').click(); await sleep(5200);
+}
+function audit(name) {
+  const cv = d.createElement('canvas'); cv.width = cv.height = 1; const cx = cv.getContext('2d', { willReadFrequently: true });
+  const rgba = c => { cx.clearRect(0, 0, 1, 1); cx.fillStyle = c; cx.fillRect(0, 0, 1, 1); const p = cx.getImageData(0, 0, 1, 1).data; return [p[0], p[1], p[2], p[3] / 255]; };
+  const mix = (a, b) => [0, 1, 2].map(i => a[i] * a[3] + b[i] * (1 - a[3])).concat(1);
+  const lum = c => { const v = [0, 1, 2].map(i => { const s = c[i] / 255; return s <= .03928 ? s / 12.92 : Math.pow((s + .055) / 1.055, 2.4); }); return .2126 * v[0] + .7152 * v[1] + .0722 * v[2]; };
+  const bgOf = el => { const st = []; for (let e = el; e; e = e.parentElement) { const c = rgba(w.getComputedStyle(e).backgroundColor); if (c[3] > 0) { st.push(c); if (c[3] >= 1) break; } } return st.reverse().reduce((a, c) => mix(c, a), [255, 255, 255, 1]); };
+  const roots = modalOpen() ? [d.querySelector('#modal .modal-content'), d.querySelector('#toasts')] : [d.querySelector('#view'), d.querySelector('#toasts')];
+  for (const root of roots) for (const el of root.querySelectorAll('*')) {
+    if (![...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) continue;
+    if (el.closest('option,select,svg,.visually-hidden,:disabled,.disabled')) continue;
+    const r = el.getBoundingClientRect(), s = w.getComputedStyle(el);
+    if (!r.width || !r.height || s.visibility === 'hidden') continue;
+    const bg = bgOf(el), fg = mix(rgba(s.color), bg), a = lum(fg), b = lum(bg), ratio = (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+    const size = parseFloat(s.fontSize), large = size >= 24 || (size >= 18.66 && +s.fontWeight >= 700);
+    if (ratio < (large ? 3 : 4.5)) res.contrast[`${el.tagName.toLowerCase()}.${el.className} fg=${fg.slice(0, 3).map(Math.round)} bg=${bg.slice(0, 3).map(Math.round)}`] ??= { ratio: +ratio.toFixed(2), at: name, text: el.textContent.trim().slice(0, 24) };
+  }
+  const over = d.documentElement.scrollWidth - d.documentElement.clientWidth;
+  if (over > 1) res.overflow[name] = over;
+  const body = d.querySelector('#modal .modal-body');
+  if (modalOpen() && body.scrollWidth - body.clientWidth > 1) res.overflow[name + '(modal)'] = body.scrollWidth - body.clientWidth;
+}
+async function snap(name) { await sleep(200); audit(name); if (STOP === name) throw 'STOP'; }
+
+const S = {
+  async '1 同意控管'() {
+    await as('u_sub3'); await go('measure');
+    ok('未同意時顯示「尚無有效同意」', view().includes('尚無有效同意'), view());
+    const before = run('DB.records.length');
+    await measure('normal');
+    ok('未同意按開始量測會被拒絕且不產生紀錄', lastToasts().includes('系統拒絕') && run('DB.records.length') === before && !modalOpen(), lastToasts() + modalText());
+    await snap('s1-denied');
+    await click('[data-act=bypassApi]');
+    ok('略過畫面呼叫 API 也被拒絕', lastToasts().includes('系統拒絕'), lastToasts());
+    await go('consent');
+    await click(btn('確認簽署'), '確認簽署');
+    ok('未勾「量測與儲存」不能簽署', lastToasts().includes('未勾選'), lastToasts());
+    d.querySelector('[name=measure]').click(); await click(btn('確認簽署'), '確認簽署');
+    ok('簽署成功', view().includes('目前有效同意') && lastToasts().includes('已記錄同意'), lastToasts());
+    await go('measure'); await click('[data-check=light]');
+    ok('引導未達標：按鈕停用且顯示「未達」', d.querySelector('#measureForm button').disabled && view().includes('未達：光線充足'), view());
+    await snap('s1-guide-fail');
+    await click('[data-check=light]');
+    await measure('normal');
+    ok('簽署後可量測並顯示結果視窗', modalText().includes('檢測結果') && run('DB.records.length') === before + 1, modalText() + lastToasts());
+    await snap('s1-result'); await closeM();
+  },
+  async '2 警示'() {
+    await as('u_sub1'); await go('measure'); const n = run('DB.alerts.length');
+    await measure('high');
+    ok('第一次血壓偏高：要求複測', modalText().includes('請休息後再量一次') && run('DB.alerts.length') === n + 1 && run('DB.alerts[0].status') === '待複測', modalText());
+    ok('複測前不發通知', !run('DB.notifications.some(x=>x.alert===DB.alerts[0].id)'));
+    await snap('s2-retest');
+    await measure('high');
+    ok('第二次仍偏高：已通知', modalText().includes('已通知負責人員') && run('DB.alerts[0].status') === '待處理', modalText());
+    ok('通知內容不含生理數值', run('DB.notifications.filter(x=>x.alert===DB.alerts[0].id).every(x=>!/188|112|mmHg/.test(x.text.replace(x.alert,"")))'));
+    await snap('s2-notified'); await closeM();
+    await as('u_ohs'); await go('alerts');
+    const id = run('DB.alerts[0].id');
+    ok('職安人員看得到通知與事件', view().includes(id) && !view().includes('沒有待處理通知'), view());
+    await click(`[data-act=openAlertDetail][data-id="${id}"]`);
+    ok('開啟處置視窗', modalText().includes('處理歷程'), modalText());
+    await snap('s2-detail');
+    d.querySelector('#alertForm [name=close]').click();
+    await click('#modal button[form=alertForm]');
+    ok('結案未填備註被拒絕', lastToasts().includes('結案必須填寫備註') && run(`DB.alerts.find(a=>a.id==='${id}').status`) !== '已結案', lastToasts());
+    d.querySelector('#alertForm [name=note]').value = '已確認當事人狀況（測試）';
+    await click('#modal button[form=alertForm]');
+    ok('填備註後結案', run(`DB.alerts.find(a=>a.id==='${id}').status`) === '已結案' && !modalOpen(), lastToasts() + modalText());
+    await snap('s2-closed');
+  },
+  async '3 品質與秒數'() {
+    await as('u_sub1'); await go('measure'); const n = run('DB.alerts.length');
+    await measure('poor');
+    ok('品質不足：提示重測、全部無法估測', modalText().includes('訊號品質不足') && run('Object.values(DB.records.at(-1).values).every(v=>v.value===null)'), modalText());
+    ok('品質不足不產生警示', run('DB.alerts.length') === n);
+    await snap('s3-poor'); await closeM();
+    await measure('down');
+    ok('服務中斷：顯示量測失敗', modalText().includes('量測失敗'), modalText());
+    await snap('s3-down'); await closeM();
+    await measure('host');
+    ok('未核准主機：拒絕量測', lastToasts().includes('不在核准清單'), lastToasts());
+    await as('u_admin'); await go('metrics'); await click('[data-change=metricEnable][data-code=RR]');
+    await go('measure'); await set('[data-key=msid]', 'S01'); await measure('normal');
+    ok('秒數不足：呼吸頻率不給數值並說明原因', run('DB.records.at(-1).values.RR.value') === null && modalText().includes('量測長度不足'), modalText());
+    await snap('s3-short'); await closeM();
+  },
+  async '4 門檻版本'() {
+    await as('u_admin'); await go('thresholds');
+    const old = run("JSON.stringify(DB.records.filter(r=>r.subject==='S01').map(r=>[r.id,r.values.SBP.judge,r.values.SBP.thr]))");
+    await click('[data-act=editThr][data-id=T2]');
+    ok('開啟新版本視窗', modalText().includes('建立 T2 新版本'), modalText());
+    await snap('s4-form');
+    d.querySelector('#thrForm [name=watchHi]').value = '120'; d.querySelector('#thrForm [name=note]').value = '測試用新版';
+    await click('#modal button[form=thrForm]');
+    ok('新增 T2 v2', run("DB.thresholds.some(t=>t.id==='T2'&&t.version===2)") && !modalOpen(), lastToasts() + modalText());
+    ok('歷史判定與引用版本不變', run("JSON.stringify(DB.records.filter(r=>r.subject==='S01').map(r=>[r.id,r.values.SBP.judge,r.values.SBP.thr]))") === old);
+    await go('measure'); await set('[data-key=msid]', 'S01'); await measure('normal');
+    ok('新量測改用 T2 v2', run('DB.records.at(-1).values.SBP.thr') === 'T2 v2', run('DB.records.at(-1).values.SBP.thr'));
+    await closeM();
+  },
+  async '5 群體分布'() {
+    await as('u_mgr'); await go('group');
+    ok('預設顯示收縮壓分布圖', !!d.querySelector('#dist'), view());
+    await snap('s5-chart');
+    await set('[data-key=gdept]', 'adm');
+    ok('行政部：少於 5 人不顯示', view().includes('少於 5 人') && !d.querySelector('#dist'), view());
+    await set('[data-key=gdept]', 'eng');
+    ok('工程部：相減只剩 3 人不顯示', view().includes('只剩 3 人') && !d.querySelector('#dist'), view());
+    await snap('s5-hidden');
+  },
+  async '6 商品審核'() {
+    await as('u_merch'); await go('products');
+    await click('[data-act=openProduct][data-id=P005]');
+    ok('P005 顯示文案禁用詞', modalText().includes('禁用詞') && modalText().includes('保證有效'), modalText());
+    await snap('s6-p005');
+    await click(btn('送審', '#modal'), '送審');
+    ok('有問題的文案無法送審', lastToasts().includes('系統拒絕'), lastToasts()); await closeM();
+    const open = async u => { await as(u); await go('products'); await click('[data-act=openProduct][data-id=P004]'); };
+    const status = () => run("productById('P004').status");
+    await open('u_sys'); await click('[data-act=approveProduct]');
+    ok('系統管理者審核被拒絕', lastToasts().includes('系統拒絕') && status() === '待專業審核', lastToasts()); await closeM();
+    await open('u_nutri'); await click('[data-act=approveProduct]');
+    ok('資格到期的營養師被拒絕', lastToasts().includes('到期') && status() === '待專業審核', lastToasts()); await closeM();
+    await open('u_pharm'); await click('[data-act=approveProduct]');
+    ok('藥師專業審核通過', status() === '待法遵審核', lastToasts() + status()); await closeM();
+    await open('u_legal1'); await snap('s6-legal'); await click('[data-act=approveProduct]');
+    ok('法遵審核通過', status() === '已核准', lastToasts() + status());
+    await click('[data-act=publishProduct]');
+    ok('發布成功且前台上架', status() === '已發布' && run("!!liveProduct(productById('P004'))"), lastToasts() + status());
+    await snap('s6-published'); await closeM();
+  },
+  async '7 推薦'() {
+    await as('u_sub2'); await go('recommend');
+    ok('指標未驗證時不推薦', view().includes('尚未完成驗證') && !d.querySelector('#view [data-act=addCart], #view [data-act=outLink]'), view());
+    await snap('s7-none');
+    await as('u_admin'); await go('metrics'); await set('[data-change=metricLevel][data-code=SBP]', '已驗證');
+    await as('u_sub2'); await go('recommend');
+    const has = () => !!d.querySelector('#view [data-act=addCart], #view [data-act=outLink]');
+    ok('改為已驗證後出現推薦商品', has(), view().slice(view().indexOf('安全檢查')));
+    await snap('s7-items');
+    const flag = () => [...d.querySelectorAll('[name=flag]')].find(x => x.value === '孕期或哺乳');
+    flag().click(); await click(btn('送出問卷'), '送出問卷');
+    ok('勾禁忌後推薦停止', !has() && view().includes('共通排除族群'), view());
+    await snap('s7-contra');
+    flag().click(); await click(btn('送出問卷'), '送出問卷');
+    ok('取消禁忌後推薦恢復', has(), view());
+    await go('lifelog'); await click('#view [data-change=symptom]', '生活紀錄的不適開關');
+    await snap('s7-symptom');
+    await go('recommend');
+    ok('回報不適後推薦停止', !has() && view().includes('有不適症狀'), view());
+  },
+  async '8 電商下架'() {
+    await as('u_merch'); await go('channels'); await click('[data-change=syncFail]');
+    await go('products'); await click('[data-act=openProduct][data-id=P002]');
+    await click('[data-act=takedownProduct]');
+    ok('P002 緊急下架', run("productById('P002').offline") === true, lastToasts()); await snap('s8-down'); await closeM();
+    await go('channels');
+    ok('顯示同步失敗與不一致告警', view().includes('失敗') && view().includes('不一致'), view());
+    await snap('s8-alert');
+    await click('[data-act=retrySync]');
+    ok('仍模擬失敗時重試，會留下新的失敗紀錄', run('DB.syncLog[0].result') === '失敗');
+    await click('[data-change=syncFail]'); await click('[data-act=retrySync]');
+    ok('取消模擬失敗後重試成功，平台已下架', run('DB.syncLog[0].result') === '成功' && !run("'P002' in DB.platformCopy"), view());
+    await snap('s8-retry');
+  },
+  async '9 自建購物'() {
+    await as('u_sub1'); await go('shop');
+    await click('[data-act=addCart][data-id=P003]'); await click('[data-act=checkout]');
+    ok('下單成功', run('DB.orders.length') === 1, lastToasts());
+    await click('[data-act=pay][data-sig=ok]');
+    ok('合法通知：入帳開發票', run('DB.orders[0].paid') && lastToasts().includes('入帳'), lastToasts());
+    const inv = run('DB.orders[0].invoice');
+    await click('[data-act=pay][data-sig=ok]');
+    ok('重送通知：不重複入帳', lastToasts().includes('重複通知') && run('DB.orders[0].invoice') === inv, lastToasts());
+    await click('[data-act=pay][data-sig=bad]');
+    ok('偽造簽章：拒絕', lastToasts().includes('簽章驗證失敗'), lastToasts());
+    await snap('s9-pay');
+    await as('u_merch'); await go('orders'); await set('[data-key=lot]', 'L2610B');
+    const hit = d.querySelectorAll('#view table')[2]?.innerText || '';
+    ok('行銷用批號查到訂單', hit.includes(run('DB.orders[0].id')), hit);
+    await snap('s9-lot');
+  },
+  async '10 知識助理'() {
+    await as('u_ohs'); await go('assistant');
+    await click('[data-act=askExample][data-q="量測失敗怎麼處理"]');
+    ok('作業助理回答附出處', view().includes('[1]') && view().includes('量測注意事項'), view());
+    await snap('s10-answer');
+    await click('[data-act=openCite]'); ok('點出處開啟原文', modalText().includes('量測注意事項'), modalText()); await snap('s10-cite'); await closeM();
+    await click('[data-act=aiFeedback]'); ok('回饋有記錄', lastToasts().includes('已記錄回饋'), lastToasts());
+    await click('[data-act=askExample][data-q="公司年假有幾天"]'); ok('查不到就說查不到', view().includes('查不到相關'), view());
+    await click('[data-act=askExample][data-q="作業員胸痛怎麼辦"]'); ok('作業助理紅旗分流', view().includes('請立即尋求協助'), view());
+    await as('u_sub1'); await go('eduqa');
+    await click('[data-act=askExample][data-q="量血壓前要注意什麼"]'); ok('衛教問答顯示審核原文', view().includes('已審核原文'), view());
+    await click('[data-act=askExample][data-q="我血壓高要吃什麼藥"]'); ok('衛教禁答題引導', view().includes('不在衛教問答範圍'), view()); await snap('s10-forbidden');
+    await click('[data-act=askExample][data-q="我突然胸悶喘不過氣"]'); ok('衛教紅旗題分流', view().includes('119') && view().includes('請立即尋求協助'), view()); await snap('s10-redflag');
+    await as('u_legal1'); await go('kb'); await click('[data-act=kbRevoke][data-id=K01]');
+    ok('撤銷 K01', run("kbById('K01').status") === '已撤銷', lastToasts());
+    await click('[data-act=kbApprove][data-id=K06]'); ok('維護人不得審自己的文件', lastToasts().includes('系統拒絕'), lastToasts());
+    await as('u_ohs'); await go('assistant'); await click('[data-act=askExample][data-q="量測失敗怎麼處理"]');
+    ok('撤銷後不再引用 K01', !view().includes('量測注意事項（示範） v'), view());
+    await as('u_legal2'); await go('kb'); await click('[data-act=kbApprove][data-id=K06]');
+    ok('法遵乙核准 K06', run("kbById('K06').status") === '已核准', lastToasts());
+    await snap('s10-kb');
+    await as('u_ohs'); await go('assistant');
+    d.querySelector('#view [name=q]').value = '高溫作業注意事項'; await click(btn('送出'), '送出');
+    ok('核准後可檢索到 K06', view().includes('熱危害預防'), view());
+  },
+  async '11 總覽的展示情境按鈕'() {
+    const n = run('DEMOS.length');
+    for (let i = 0; i < n; i++) {
+      await as('u_admin'); await go('home');
+      const info = run(`JSON.stringify(DEMOS[${i}])`), demo = JSON.parse(info);
+      await click(d.querySelector(`#view [data-act=goAs][data-user="${demo.user}"][data-to="${demo.to}"]`), demo.title);
+      ok(`「${demo.title}」按鈕開啟對應頁面`, w.location.hash === '#/' + demo.to && run('DB.currentUser') === demo.user && !view().includes('沒有此功能權限'), w.location.hash + view().slice(0, 120));
+    }
+  },
+  async '12 重置資料'() {
+    const state = () => run('JSON.stringify([DB.consents.length, DB.records.length, !!activeConsent("S15")])');
+    const initial = state();
+    await as('u_sub3'); await go('consent');
+    d.querySelector('[name=measure]').click(); await click(btn('確認簽署'), '確認簽署');
+    await go('measure'); await measure('normal'); await closeM();
+    await click('[data-act=toggleBig]');
+    const changed = state();
+    await click('[data-act=reset]');
+    ok('按重置會先跳出確認視窗', modalText().includes('重置示範資料'), modalText());
+    await snap('s12-confirm');
+    await click('#modal [data-bs-dismiss=modal].btn-secondary');
+    ok('按取消不會清除資料', !modalOpen() && state() === changed && changed !== initial, state());
+    await click('[data-act=reset]');
+    const reloaded = new Promise(r => { f.onload = () => r(true); });
+    d.querySelector('#modal [data-act=resetConfirm]').click();
+    const didReload = await Promise.race([reloaded, sleep(5000)]);
+    await sleep(500); w = f.contentWindow; d = w.document;
+    ok('確認後頁面重新載入', didReload);
+    ok('回到總覽', w.location.hash === '#/home' && txt('#page-title').includes('模組總覽'), w.location.hash);
+    ok('身分回到健康管理員阿德', run('DB.currentUser') === 'u_admin', run('DB.currentUser'));
+    ok('操作紀錄清除、資料回到初始狀態', state() === initial, state() + ' vs ' + initial);
+    ok('大字模式一併還原', !d.documentElement.classList.contains('big'));
+  },
+  async '13 現場機台模式'() {
+    await as('u_op'); await go('kiosk');
+    const shown = s => w.getComputedStyle(d.querySelector(s)).display !== 'none';
+    ok('隱藏頂列與頁首', !shown('.topbar') && !shown('.pageband'));
+    await snap('s13-id');
+    const enter = async code => { d.querySelector('#view [name=code]').value = code; await click(btn('確認'), '確認'); };
+    const atId = () => !!d.querySelector('#view [name=code]');
+    await enter('S99'); ok('查無識別碼會被拒絕', lastToasts().includes('查無此識別碼') && atId(), lastToasts());
+    await enter('S08'); ok('不在本場域的人員會被拒絕', lastToasts().includes('不在本場域') && atId(), lastToasts());
+    await enter('S15'); ok('未同意者會被拒絕', lastToasts().includes('沒有有效同意') && atId(), lastToasts());
+    await enter('s01'); ok('識別碼不分大小寫，顯示確認畫面', view().includes('王示範，您好'), view());
+    await snap('s13-ready');
+    const n = run('DB.records.length');
+    await click('[data-act=kioskRun]');
+    ok('完成量測並顯示結果', run('DB.records.length') === n + 1 && !!d.querySelector('#kioskLeft'), view());
+    await snap('s13-result');
+    await sleep(8000);
+    const left = +txt('#kioskLeft');
+    ok('倒數秒數會遞減', left > 0 && left < 15, txt('#kioskLeft'));
+    await sleep(9000);
+    ok('倒數結束自動清畫面，不殘留姓名與數值', atId() && !view().includes('王示範') && !d.querySelector('#view .metric-card'), view());
+    await enter('S01'); await click('[data-act=kioskRun]'); await click('[data-act=kioskClear]');
+    ok('按「完成」立即清畫面', atId() && !view().includes('王示範'), view());
+    await sleep(17000);
+    ok('清除後舊的倒數不再作用', atId(), view());
+
+    await enter('S01'); await sleep(20000);
+    const idleLeft = +txt('#kioskLeft');
+    ok('確認畫面顯示倒數，20 秒時尚未清除', view().includes('王示範') && idleLeft > 0 && idleLeft <= 10, view());
+    await sleep(12000);
+    ok('確認畫面閒置超過 30 秒，自動清除姓名', atId() && !view().includes('王示範'), view());
+    await enter('S01'); await sleep(20000); await click('[data-act=kioskRun]'); await sleep(11000);
+    ok('開始量測後，確認畫面的倒數不再作用', !!d.querySelector('#view .metric-card'), view().slice(0, 200));
+    await click('[data-act=kioskClear]');
+    await enter('S01'); await go('home'); await go('kiosk');
+    ok('不按「離開機台模式」就離開，再進入時不顯示前一人', atId() && !view().includes('王示範'), view());
+
+    if (atId()) await enter('S01');
+    await click('[data-act=kioskRun]'); await go('home'); await go('kiosk');
+    ok('停在結果畫面時離開（未按按鈕），立即再進入也不顯示前一人結果', atId() && !d.querySelector('#view .metric-card'), view().slice(0, 200));
+    if (d.querySelector('#view [data-act=kioskClear]')) await click('[data-act=kioskClear]');
+    if (atId()) await enter('S01');
+    await click('#view [data-act=kioskExit]', '離開機台模式');
+    ok('「離開機台模式」回到總覽並恢復頂列', w.location.hash === '#/home' && !d.body.classList.contains('kiosk') && shown('.topbar'), w.location.hash);
+    await go('kiosk');
+    ok('按離開後再進入，從識別畫面開始', atId() && !view().includes('王示範'), view());
+  },
+  async '14 匯出 CSV'() {
+    const files = [];
+    const blobs = new Map();
+    w.URL.createObjectURL = b => { const u = 'blob:test-' + blobs.size; blobs.set(u, b); return u; };
+    w.URL.revokeObjectURL = () => {};
+    const realClick = w.HTMLAnchorElement.prototype.click;
+    w.HTMLAnchorElement.prototype.click = function () { if (this.download) files.push({ name: this.download, blob: blobs.get(this.getAttribute('href')) }); else realClick.call(this); };
+    const read = async file => { const bytes = new Uint8Array(await file.blob.arrayBuffer()); const text = new TextDecoder().decode(bytes); return { bom: bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF, lines: text.split('\r\n') }; };
+    async function exportBy(act) {
+      const before = files.length, logs = run('DB.exportLog.length');
+      await click(`#view [data-act=${act}]`);
+      if (files.length !== before + 1) { ok(`${act} 產生下載檔`, false, lastToasts()); return null; }
+      ok(`${act} 產生下載檔並寫入匯出紀錄`, run('DB.exportLog.length') === logs + 1 && lastToasts().includes('匯出紀錄'), lastToasts());
+      return { name: files.at(-1).name, ...await read(files.at(-1)) };
+    }
+    await as('u_sub1'); await go('history');
+    let c = await exportBy('exportPersonal');
+    if (c) {
+      ok('個人報表：檔名、UTF-8 BOM、筆數正確', c.name === '個人報表_S01.csv' && c.bom && c.lines.length === run("recordsOf('S01').length") + 1, `${c.name} bom=${c.bom} lines=${c.lines.length}`);
+      ok('個人報表：每列都有非醫療診斷聲明', c.lines.slice(1).every(l => l.includes('非醫療診斷')), c.lines[1]);
+      ok('個人報表：不含「實驗中」指標', !c.lines[0].includes('呼吸頻率'), c.lines[0]);
+    }
+    await as('u_mgr'); await go('group');
+    c = await exportBy('exportGroup');
+    if (c) ok('群體彙總：只有三個分類，不含姓名', c.lines.length === 4 && !run('DB.subjects.map(s=>s.name)').some(n => c.lines.join().includes(n)), c.lines.join(' / '));
+    await set('[data-key=gdept]', 'adm');
+    ok('人數過少時沒有匯出按鈕', !d.querySelector('#view [data-act=exportGroup]'), view());
+    await as('u_admin'); await go('reference');
+    d.querySelector('#view [name=ref]').value = '999'; d.querySelector('#view [name=device]').value = '=1+1';
+    await click(btn('新增'), '新增配對');
+    c = await exportBy('exportRef');
+    if (c) {
+      const row = c.lines.find(l => l.includes('999')) || '';
+      ok('參考值配對：公式開頭的文字加上單引號', row.includes('"\'=1+1"'), row);
+      ok('參考值配對：負數差值仍是數字', /"-\d+\.\d{2}"/.test(row), row);
+    }
+    await go('audit');
+    ok('稽核頁看得到匯出紀錄', view().includes('個人報表_S01') && view().includes('群體彙總') && view().includes('參考值配對'), view().slice(0, 400));
+  },
+  async '15 機台識別畫面閒置清除'() {
+    await as('u_op'); await go('kiosk');
+    const input = () => d.querySelector('#view [name=code]');
+    const type = v => { input().value = v; input().dispatchEvent(new w.Event('input', { bubbles: true })); };
+    type('S0'); await sleep(20000); type('S01'); await sleep(20000);
+    ok('持續輸入會重新計時，距最後輸入 20 秒仍保留', input().value === 'S01', input().value);
+    await sleep(12000);
+    ok('距最後輸入超過 30 秒清空識別碼', input().value === '', input().value);
+    type('S01'); await click(btn('確認'), '確認'); await sleep(12000);
+    ok('確認後改用確認畫面的 30 秒倒數', view().includes('王示範') && +txt('#kioskLeft') > 10, view());
+  },
+  async '16 複審提醒與電子郵件'() {
+    await as('u_merch'); await go('products');
+    ok('列出即將到期與逾期的複審', view().includes('複審提醒') && view().includes('逾期 5 天') && view().includes('20 天內到期'), view().slice(0, 500));
+    ok('逾期只提醒，不自動下架', run("!!liveProduct(productById('P003'))"));
+    await snap('s16-review');
+    await as('u_sub1'); await go('measure'); await measure('high'); await measure('high'); await closeM();
+    ok('未啟用電子郵件時不產生寄送紀錄', run('DB.mails.length') === 0);
+    await as('u_admin'); await go('alerts'); await click('#view [data-change=emailNotify]'); await click('#view [data-act=remind]', '模擬逾時提醒');
+    ok('啟用後通知產生寄送紀錄', run('DB.mails.length') > 0 && view().includes('健康警示待處理通知'), view().slice(0, 500));
+    ok('郵件內容不含生理數值', run('DB.mails.every(m=>!/188|112|mmHg|血壓/.test(m.subject + m.text.replace(m.alert,"")))'));
+    await snap('s16-mail');
+    await as('u_care');await go('alerts');
+    ok('非健康管理員看不到開關，也看不到別人的郵件', !d.querySelector('#view [data-change=emailNotify]') && !view().includes('職安劉專員'), view().slice(0, 600));
+  },
+  async '17 待辦摘要與橫幅'() {
+    w.localStorage.removeItem('health-proto-banner-hidden');
+    await as('u_pharm'); await go('home');
+    ok('藥師看到待審商品', txt('#view .todo').includes('等你審核的商品'), txt('#view .todo'));
+    ok('待辦不列沒有權限的頁面', !txt('#view .todo').includes('警示'), txt('#view .todo'));
+    await snap('s17-pro');
+    await as('u_sub3'); await go('home');
+    ok('未同意的受測者看到同意待辦', txt('#view .todo').includes('尚未同意量測'), txt('#view .todo'));
+    await click('#view [data-act=toggleBanner]');
+    ok('可收合插畫', !d.querySelector('#view .home-banner'));
+    await go('consent'); await go('home');
+    ok('收合狀態會保留', !d.querySelector('#view .home-banner'));
+    await click('#view [data-act=toggleBanner]');
+    ok('可再展開', !!d.querySelector('#view .home-banner'));
+  },
+  async '18 展示引導'() {
+    await as('u_admin'); await go('home');
+    ok('每個展示情境都有引導步驟，且身分有權開啟該頁', run('DEMOS.every(x => GUIDE_STEPS[x.title]?.every(([, u, p]) => canOpen(p, DB.users.find(y => y.id === u))))'));
+    await click('#view [data-act=goAs][data-user="u_care"][data-to="alerts"]', '警示與處置');
+    const g = () => txt('#guide');
+    ok('開始情境後顯示第 1 步', g().includes('警示與處置') && g().includes('1／3'), g());
+    await click('#guide [data-act=guideNext]'); await click('#guide [data-act=guideNext]');
+    await click('#guide [data-act=goAs]');
+    ok('切到第 3 步會換身分與頁面', run('DB.currentUser') === 'u_ohs' && w.location.hash === '#/alerts' && g().includes('3／3'), g());
+    await snap('s18-guide');
+    await click('#guide [data-act=guideMin]');
+    ok('可收合', !d.querySelector('#guide .guide-body'));
+    await click('#guide [data-act=guideClose]');
+    ok('可結束', d.querySelector('#guide').hidden);
+  },
+  async '19 意見回饋'() {
+    w.localStorage.removeItem('health-proto-feedback'); run('feedback.length = 0');
+    await as('u_sub1'); await go('measure');
+    await click('[data-act=openFeedback]');
+    ok('回饋視窗帶入目前頁面', modalText().includes('目前頁面：健康量測'), modalText());
+    d.querySelector('#feedbackForm textarea').value = '<b>測試回饋</b>';
+    await click('#modal button[form=feedbackForm]');
+    ok('送出後列出回饋，HTML 以文字顯示', modalText().includes('<b>測試回饋</b>'), modalText());
+    await snap('s19-feedback'); await closeM();
+    await click('[data-act=reset]');
+    const reloaded = new Promise(r => { f.onload = () => r(true); });
+    d.querySelector('#modal [data-act=resetConfirm]').click();
+    await Promise.race([reloaded, sleep(5000)]); await sleep(500); w = f.contentWindow; d = w.document;
+    ok('重置示範資料不會清掉回饋', run('feedback.length') === 1);
+    await click('[data-act=openFeedback]'); await click('#modal [data-act=clearFeedback]');
+    ok('清除要按兩次', run('feedback.length') === 1);
+    await click('#modal [data-act=clearFeedback]');
+    ok('第二次按下才清除', run('feedback.length') === 0);
+    await closeM();
+  },
+  async '20 長照據點'() {
+    await as('u_day'); await go('daycare');
+    const watch = () => txt('#view .col-lg-5 .card');
+    ok('關懷名單列出超過 3 天未報到的長輩', watch().includes('魏玉蘭') && /\d+ 天未報到/.test(watch()), watch());
+    ok('關懷名單列出近期多次「注意」的長輩', watch().includes('童添丁') && watch().includes('次「注意」以上'), watch());
+    await snap('s20-daycare');
+    await click('#view [data-act=familyNotify][data-sid=S36]');
+    ok('家屬未授權時不能通知', lastToasts().includes('系統拒絕') && run('DB.familyMsgs.length') === 0, lastToasts());
+    await click('#view [data-change=familyView][data-sid=S36]'); await click('#view [data-act=familyNotify][data-sid=S36]');
+    ok('授權後可通知，內容不含生理數值', run('DB.familyMsgs.length') === 1 && run('!/mmHg|bpm|血壓|心率|血氧|\\d{3}/.test(DB.familyMsgs[0].text)'), run('JSON.stringify(DB.familyMsgs)'));
+    await click('#view [data-act=daycareMeasure][data-sid=S33]');
+    ok('「量測」帶入長輩與據點量測站', w.location.hash === '#/measure' && run("view.msid") === 'S33' && d.querySelector('[name=device]').value === 'CAM-D01', w.location.hash);
+    await as('u_care'); await go('daycare');
+    ok('沒有被指派的照護者看不到據點長輩', view().includes('沒有被指派') && !view().includes('童添丁'), view());
+    await as('u_op'); await go('daycare');
+    ok('操作員沒有此頁權限', view().includes('沒有此功能權限'), view());
+  },
+  async '21 社區藥局與代簽'() {
+    ok('家屬代簽者不開放個人化推薦', run("recommend('S33').gates.some(g => !g.ok && g.why.includes('代簽'))") && run("recommend('S02').gates.every(g => g.label !== '量測同意由本人簽署' || g.ok)"));
+    await as('u_sub1'); await go('recommend');
+    ok('只有職場量測的人不能分享', d.querySelector('#view [name=share]').disabled && view().includes('職場量測不分享'), view().slice(-300));
+    await as('u_sub2'); await go('recommend');
+    d.querySelector('#view [name=q]').value = '測試：運動後可以補充什麼'; d.querySelector('#view [name=share]').click();
+    await click('#view form[data-submit=askConsult] button', '送出諮詢');
+    const id = run('DB.consults[0].id');
+    ok('送出諮詢並附上最近一次量測', !!run('DB.consults[0].share') && lastToasts().includes('附上'), lastToasts());
+    await as('u_pharm'); await go('pharmacy');
+    ok('藥師看到分享的量測', view().includes('測試：運動後') && /收縮壓 \d/.test(view()), view().slice(0, 500));
+    ok('查看分享的量測寫入稽核紀錄', run(`DB.accessLog.some(x => x.user === 'u_pharm' && x.what === '藥局諮詢 ${id}')`));
+    await snap('s21-pharmacy');
+    await as('u_nutri'); await go('pharmacy');
+    ok('資格到期者看不到分享內容也不能回覆', view().includes('資格到期') && !/收縮壓 \d/.test(view()) && !d.querySelector('#view [data-submit=replyConsult]'), view().slice(0, 500));
+    await as('u_admin'); await go('m-health');
+    ok('健康管理員在「場景應用」看得到社區藥局', !!d.querySelector('#rail a[href="#/pharmacy"]'), txt('#rail'));
+    await go('pharmacy');
+    ok('健康管理員看不到分享的量測，也不能回覆', view().includes('僅藥師可查看') && !/收縮壓 \d/.test(view()) && !d.querySelector('#view [data-submit=replyConsult]'), view().slice(0, 500));
+    await as('u_sub2'); await go('recommend'); await click(`#view [data-act=revokeShare][data-id="${id}"]`, '撤回分享');
+    await as('u_pharm'); await go('pharmacy');
+    ok('撤回後藥師看不到', view().includes('本人已撤回') && run(`!sharedRecord(DB.consults.find(c => c.id === '${id}'))`), view().slice(0, 500));
+  }
+};
+
+(async () => {
+  let stopped = false;
+  for (const [name, fn] of Object.entries(S)) {
+    if (ONLY && name.split(' ')[0] !== ONLY) continue;
+    scen = name;
+    try { await fresh(); await fn(); }
+    catch (e) { if (e === 'STOP') { stopped = true; break; } ok('情境執行中斷', false, e && (e.stack || e.message || e)); }
+  }
+  if (!stopped) { document.getElementById('out').textContent = 'RESULT' + JSON.stringify(res) + 'END'; f.style.display = 'none'; }
+  else document.getElementById('out').remove();
+})();
+</script>
