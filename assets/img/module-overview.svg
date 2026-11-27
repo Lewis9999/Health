@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" role="img" aria-label="模組總覽：健康管理、健康商品、知識助理、系統設定連接到中央平台">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a1033"/><stop offset="1" stop-color="#16154a"/>
+    </linearGradient>
+    <pattern id="dots" width="40" height="40" patternUnits="userSpaceOnUse">
+      <circle cx="20" cy="20" r="1.6" fill="#8f7bff" opacity=".22"/>
+    </pattern>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect width="1600" height="900" fill="url(#dots)"/>
+  <circle cx="800" cy="450" r="345" fill="#7c3cff" opacity=".07"/>
+  <circle cx="800" cy="450" r="260" fill="#7c3cff" opacity=".09"/>
+  <circle cx="800" cy="450" r="305" fill="none" stroke="#8f5bff" stroke-width="2" stroke-dasharray="3 12" opacity=".7"/>
+
+  <!-- 連接線與節點 -->
+  <g fill="none" stroke="#8b3dff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M530 245 H600 L700 345"/>
+    <path d="M1070 245 H1000 L900 345"/>
+    <path d="M530 655 H600 L700 555"/>
+    <path d="M1070 655 H1000 L900 555"/>
+  </g>
+  <g fill="#fff" stroke="#8b3dff" stroke-width="6">
+    <circle cx="600" cy="245" r="10"/><circle cx="1000" cy="245" r="10"/>
+    <circle cx="600" cy="655" r="10"/><circle cx="1000" cy="655" r="10"/>
+  </g>
+  <g fill="#c9b8ff">
+    <rect x="643" y="281" width="14" height="14" rx="3"/><rect x="943" y="281" width="14" height="14" rx="3"/>
+    <rect x="643" y="605" width="14" height="14" rx="3"/><rect x="943" y="605" width="14" height="14" rx="3"/>
+  </g>
+
+  <!-- 四張模組卡片底板 -->
+  <g fill="#050824" opacity=".55">
+    <rect x="122" y="104" width="420" height="306" rx="28"/><rect x="1082" y="104" width="420" height="306" rx="28"/>
+    <rect x="122" y="514" width="420" height="306" rx="28"/><rect x="1082" y="514" width="420" height="306" rx="28"/>
+  </g>
+  <g fill="#1c2260" stroke="#4a45a8" stroke-width="2">
+    <rect x="110" y="90" width="420" height="306" rx="28"/><rect x="1070" y="90" width="420" height="306" rx="28"/>
+    <rect x="110" y="500" width="420" height="306" rx="28"/><rect x="1070" y="500" width="420" height="306" rx="28"/>
+  </g>
+
+  <!-- 1 健康管理：心率、趨勢 -->
+  <g transform="translate(110 90)">
+    <rect x="34" y="34" width="352" height="144" rx="16" fill="#0d1442"/>
+    <path d="M54 112 H122 L141 76 L166 150 L190 92 L204 112 H250" fill="none" stroke="#a66bff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M315 143 C245 100 266 56 296 62 C306 64 312 71 315 79 C318 71 324 64 334 62 C364 56 385 100 315 143 Z" fill="#8b3dff"/>
+    <path d="M287 98 H303 L311 84 L320 112 L328 98 H343" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <g fill="#5b52d6">
+      <rect x="40" y="244" width="30" height="30" rx="6"/><rect x="84" y="224" width="30" height="50" rx="6"/>
+      <rect x="128" y="236" width="30" height="38" rx="6"/><rect x="172" y="204" width="30" height="70" rx="6" fill="#a66bff"/>
+    </g>
+    <circle cx="316" cy="236" r="38" fill="none" stroke="#343a8c" stroke-width="16"/>
+    <path d="M316 198 A38 38 0 1 1 280 248" fill="none" stroke="#a66bff" stroke-width="16" stroke-linecap="round"/>
+  </g>
+
+  <!-- 2 健康商品：購物袋、商品、審核勾選 -->
+  <g transform="translate(1070 90)">
+    <rect x="34" y="34" width="352" height="238" rx="16" fill="#0d1442"/>
+    <path d="M105 112 V96 C105 58 175 58 175 96 V112" fill="none" stroke="#c9b8ff" stroke-width="10" stroke-linecap="round"/>
+    <path d="M72 108 H208 L222 240 H58 Z" fill="#8b3dff"/>
+    <path d="M140 211 C94 183 108 152 127 156 C134 157 138 162 140 168 C142 162 146 157 153 156 C172 152 186 183 140 211 Z" fill="#fff"/>
+    <rect x="258" y="130" width="60" height="110" rx="12" fill="#5b52d6"/>
+    <rect x="270" y="108" width="36" height="24" rx="5" fill="#c9b8ff"/>
+    <rect x="268" y="165" width="40" height="38" rx="5" fill="#fff"/>
+    <path d="M288 173 V195 M277 184 H299" stroke="#8b3dff" stroke-width="7" stroke-linecap="round"/>
+    <rect x="326" y="180" width="42" height="60" rx="9" fill="#a66bff"/>
+    <rect x="333" y="167" width="28" height="15" rx="4" fill="#c9b8ff"/>
+    <circle cx="340" cy="84" r="28" fill="#fff"/>
+    <path d="M327 84 L337 94 L354 74" fill="none" stroke="#6a2be0" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- 3 知識助理：對話、文件出處 -->
+  <g transform="translate(110 500)">
+    <rect x="34" y="34" width="352" height="238" rx="16" fill="#0d1442"/>
+    <path d="M74 62 H214 Q232 62 232 80 V122 Q232 140 214 140 H108 L78 164 L84 140 H74 Q56 140 56 122 V80 Q56 62 74 62 Z" fill="#8b3dff"/>
+    <g fill="#fff"><circle cx="106" cy="101" r="10"/><circle cx="144" cy="101" r="10"/><circle cx="182" cy="101" r="10"/></g>
+    <rect x="248" y="74" width="106" height="138" rx="12" fill="#e9e4ff"/>
+    <path d="M268 104 H334 M268 128 H334 M268 152 H312" stroke="#5b52d6" stroke-width="9" stroke-linecap="round"/>
+    <rect x="266" y="172" width="42" height="20" rx="10" fill="#8b3dff"/>
+    <path d="M100 182 H220 Q236 182 236 198 V228 Q236 244 220 244 H208 L214 262 L188 244 H100 Q84 244 84 228 V198 Q84 182 100 182 Z" fill="#343a8c"/>
+    <path d="M108 204 H210 M108 224 H176" stroke="#c9b8ff" stroke-width="9" stroke-linecap="round"/>
+    <circle cx="316" cy="224" r="27" fill="none" stroke="#a66bff" stroke-width="10"/>
+    <path d="M336 244 L358 266" stroke="#a66bff" stroke-width="12" stroke-linecap="round"/>
+  </g>
+
+  <!-- 4 系統設定：齒輪、調整桿、稽核 -->
+  <g transform="translate(1070 500)">
+    <rect x="34" y="34" width="352" height="238" rx="16" fill="#0d1442"/>
+    <g transform="translate(130 128)">
+      <g fill="#8b3dff">
+        <rect x="-15" y="-74" width="30" height="148" rx="7"/>
+        <rect x="-15" y="-74" width="30" height="148" rx="7" transform="rotate(45)"/>
+        <rect x="-15" y="-74" width="30" height="148" rx="7" transform="rotate(90)"/>
+        <rect x="-15" y="-74" width="30" height="148" rx="7" transform="rotate(135)"/>
+        <circle r="55"/>
+      </g>
+      <circle r="23" fill="#0d1442"/>
+    </g>
+    <path d="M236 80 H356 M236 130 H356 M236 180 H356" stroke="#343a8c" stroke-width="10" stroke-linecap="round"/>
+    <path d="M236 80 H316 M236 130 H268 M236 180 H334" stroke="#a66bff" stroke-width="10" stroke-linecap="round"/>
+    <g fill="#fff"><circle cx="316" cy="80" r="15"/><circle cx="268" cy="130" r="15"/><circle cx="334" cy="180" r="15"/></g>
+    <rect x="58" y="222" width="304" height="30" rx="15" fill="#1c2260"/>
+    <circle cx="76" cy="237" r="7" fill="#c9b8ff"/>
+    <path d="M96 237 H226 M246 237 H292" stroke="#5b52d6" stroke-width="8" stroke-linecap="round"/>
+  </g>
+
+  <!-- 中央平台：資料與權限核心 -->
+  <path d="M800 292 L937 371 V529 L800 608 L663 529 V371 Z" fill="#050824" opacity=".55" transform="translate(10 14)"/>
+  <path d="M800 292 L937 371 V529 L800 608 L663 529 V371 Z" fill="#7c2dff"/>
+  <path d="M800 320 L913 385 V515 L800 580 L687 515 V385 Z" fill="#111752" stroke="#c9b8ff" stroke-width="3"/>
+  <path d="M800 372 L862 394 V449 C862 490 836 516 800 531 C764 516 738 490 738 449 V394 Z" fill="#fff"/>
+  <path d="M752 452 H775 L788 421 L808 482 L822 452 H848" fill="none" stroke="#7c2dff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- 裝飾 -->
+  <g fill="#a66bff">
+    <circle cx="800" cy="145" r="8"/><circle cx="800" cy="755" r="8"/>
+    <circle cx="495" cy="450" r="8"/><circle cx="1105" cy="450" r="8"/>
+    <rect x="58" y="446" width="90" height="8" rx="4" opacity=".7"/><rect x="1452" y="446" width="90" height="8" rx="4" opacity=".7"/>
+    <rect x="756" y="68" width="88" height="8" rx="4" opacity=".7"/><rect x="756" y="824" width="88" height="8" rx="4" opacity=".7"/>
+  </g>
+  <g stroke="#6f63e8" stroke-width="3" stroke-linecap="round" fill="none">
+    <path d="M800 163 V270"/><path d="M800 630 V737"/>
+    <path d="M168 450 H475"/><path d="M1125 450 H1432"/>
+  </g>
+</svg>
