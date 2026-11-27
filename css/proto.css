@@ -134,6 +134,17 @@ code { color: #a82868; }
 .page-cards .page-desc { font-size: .8125rem; color: var(--muted); }
 .page-cards .badge { position: absolute; top: 14px; right: 14px; }
 html.big .page-cards .page-desc { color: #222; }
+/* 功能權限總覽：勾號用文字色，綠色保留給健康判定與狀態。第一欄固定，左右捲動時仍看得到功能名稱。 */
+.perm-table { font-size: .8125rem; }
+.section .perm-table { font-size: .8125rem; }
+.perm-table thead th { vertical-align: bottom; white-space: normal !important; }
+.perm-table .perm-cell { width: 62px; min-width: 52px; padding-left: 4px; padding-right: 4px; text-align: center; }
+.perm-table th:first-child { position: sticky; left: 0; z-index: 1; min-width: 132px; background: var(--surface); }
+.perm-table tbody th small { display: block; font-weight: 400; color: var(--muted); }
+.perm-table .perm-group th { position: static; background: var(--mod-tint); }
+.perm-table .perm-note { min-width: 220px; }
+.perm-yes { font-size: 1.25rem; font-weight: 700; color: var(--ink); }
+.perm-no { color: var(--muted); }
 .proto-note { margin-top: 28px; padding: 12px 16px; border: 1px dashed #98a6b2; border-radius: 6px; font-size: .8125rem; }
 
 /* ---------- 橫幅收合與待辦摘要 ---------- */
@@ -183,6 +194,25 @@ body.kiosk.has-guide .content { padding-bottom: 24px; }
 .flow span { padding: 3px 10px; border-radius: 4px; background: var(--paper); color: var(--muted); }
 .flow span.on { background: var(--mod); color: #fff; }
 .cite { border-left: 4px solid var(--mod); background: var(--mod-tint); padding: 10px 12px; border-radius: 4px; white-space: pre-wrap; }
+/* 流程總覽：步驟用中性色與模組色，不用健康判定的紅黃綠。 */
+.flow-steps { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.flow-steps li { display: flex; align-items: center; gap: 8px; }
+.flow-steps li + li::before { content: "→"; color: var(--muted); }
+.flow-step { align-self: stretch; min-width: 128px; padding: 8px 12px; border: 1px solid var(--muted); border-radius: 6px; background: var(--surface); }
+.flow-step strong { display: block; font-size: .875rem; }
+.flow-step small { display: block; color: var(--muted); }
+.flow-step .flow-count { display: block; font-size: 1.125rem; font-weight: 700; }
+.flow-step.has-wait { border: 2px solid var(--mod); background: var(--mod-tint); }
+.flow-step.has-wait small { color: var(--ink); }
+@media (max-width: 575.98px) {
+  .flow-steps { flex-direction: column; }
+  .flow-steps li { flex-direction: column; align-items: stretch; }
+  .flow-steps li + li::before { content: "↓"; align-self: center; }
+}
+.case-table table { min-width: 860px; }
+.consult-thread { min-width: 220px; }
+.consult-thread li + li { margin-top: 6px; }
+@media print { .flow-card { break-inside: avoid; } .flow-step { min-width: 0; padding: 4px 8px; } .case-table table { min-width: 0; } }
 pre.payload { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 6px; font-size: 12px; }
 
 /* ---------- 機台模式（FR-53） ---------- */
@@ -201,6 +231,9 @@ html.big { --rail-w: 270px; }
 html.big .persona-select { width: 240px; }
 
 /* ---------- 窄螢幕 ---------- */
+/* 六個模組頁籤：1600px 以下收窄間距，避免最後一個頁籤被切掉 */
+@media (min-width: 992px) and (max-width: 1599px) { .modtab { gap: 4px; padding: 0 9px; } .tools label { display: none; } }
+@media (min-width: 992px) and (max-width: 1199px) { .modtab i { display: none; } }
 @media (max-width: 1399px) { .proto-tag, .tools .btn span, .tools label { display: none !important; } .persona-select { width: 180px; } }
 @media (max-width: 1199px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
@@ -247,6 +280,10 @@ html.big .persona-select { width: 240px; }
   .pageband h1 { font-size: 15pt; }
   .content, body.has-guide .content { padding: 0; max-width: none; }
   .table-responsive { overflow: visible; }
+  .perm-table th:first-child { position: static; min-width: 0; }
+  .section .perm-table { font-size: 7.5pt; }
+  .perm-table .perm-cell { width: auto; min-width: 0; padding: 2px; }
+  .perm-table .perm-note { min-width: 0; width: 28%; }
   tr, .alert, .stat, .chart-box { break-inside: avoid; }
   /* 圖表高度不在列印時改動：畫布已依螢幕高度繪製，改矮會被下方表格蓋住。 */
   .content .row > .col-md-3 { flex: 0 0 25%; max-width: 25%; }
